@@ -84,23 +84,17 @@ Damit läuft nur der kleine llama-swap Gateway nach dem Login. Das 27B-Modell be
 
 ## Hermes
 
-Einmalig:
+Hermes sollte den Gateway als benannten Custom Provider `turboquant` verwenden. Die per-model Context-Längen werden explizit mit 200K bzw. 250K hinterlegt, damit Hermes beim Umschalten nicht auf einen gecachten oder generischen Default zurückfällt.
+
+Danach funktioniert in einer laufenden Session z. B.:
 
 ```text
-hermes model
-→ Custom endpoint
-→ Base URL: http://127.0.0.1:9292/v1
+/model custom:turboquant:qwen3.8-27b-200k
+/model custom:turboquant:qwen3.8-27b-250k
+/model custom:turboquant:qwen3.8-27b-200k-mtp
 ```
 
-Der Endpoint stellt `/v1/models` bereit, sodass Hermes die virtuellen Modelle entdecken kann. Danach kann innerhalb von Hermes z. B. gewechselt werden:
-
-```text
-/model custom:qwen3.8-27b-200k
-/model custom:qwen3.8-27b-250k
-/model custom:qwen3.8-27b-200k-mtp
-```
-
-Die Context-Länge ist außerdem als Capability der jeweiligen llama-swap Model-ID hinterlegt (200000 bzw. 250000).
+Die vollständige `~/.hermes/config.yaml`-Ergänzung steht in [docs/HERMES.md](docs/HERMES.md).
 
 ## OpenCode
 
