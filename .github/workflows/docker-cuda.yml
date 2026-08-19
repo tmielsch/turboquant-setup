@@ -4,17 +4,19 @@ on:
   pull_request:
     paths:
       - "docker/**"
-      - "compose.yaml"
-      - "llama-swap/**"
       - ".github/workflows/docker-cuda.yml"
   push:
     branches: [main]
     paths:
       - "docker/**"
-      - "compose.yaml"
-      - "llama-swap/**"
       - ".github/workflows/docker-cuda.yml"
   workflow_dispatch:
+
+# If several commits land quickly while tuning the Dockerfile, do not waste
+# runner time compiling obsolete CUDA images. Only the newest run matters.
+concurrency:
+  group: cuda-image-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -42,6 +44,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # One image, one CUDA engine. The 200K/250K/MTP variants are runtime
+      # llama-swap configuration only and never cause separate image builds.
       - name: Build PR image (validation only)
         if: github.event_name == 'pull_request'
         uses: docker/build-push-action@v6
