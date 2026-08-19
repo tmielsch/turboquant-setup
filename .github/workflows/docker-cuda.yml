@@ -1,10 +1,8 @@
 name: Build CUDA container
 
+# CUDA compilation is expensive. Do not rebuild the engine for every PR commit.
+# Runtime model variants (200K/250K/MTP) are config only and never need a rebuild.
 on:
-  pull_request:
-    paths:
-      - "docker/**"
-      - ".github/workflows/docker-cuda.yml"
   push:
     branches: [main]
     paths:
@@ -12,8 +10,6 @@ on:
       - ".github/workflows/docker-cuda.yml"
   workflow_dispatch:
 
-# If several commits land quickly while tuning the Dockerfile, do not waste
-# runner time compiling obsolete CUDA images. Only the newest run matters.
 concurrency:
   group: cuda-image-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -27,7 +23,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
+  build-and-publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -37,29 +33,14 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # One image, one CUDA engine. The 200K/250K/MTP variants are runtime
-      # llama-swap configuration only and never cause separate image builds.
-      - name: Build PR image (validation only)
-        if: github.event_name == 'pull_request'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile.cuda
-          platforms: linux/amd64
-          push: false
-          tags: local/turboquant-setup:cuda
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
+      # Exactly one image / one CUDA engine. All llama-swap model IDs reuse it.
       - name: Build and publish CUDA image
-        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v6
         with:
           context: .
