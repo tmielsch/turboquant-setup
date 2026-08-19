@@ -1,93 +1,158 @@
 # TurboQuant Setup
 
-Lokales Qwen/TurboQuant-Setup für sehr lange Kontexte auf 16 GB VRAM.
+Prebuilt TurboQuant + `llama-swap` setup for running long-context Qwen models on a 16 GB NVIDIA GPU, primarily tested for an RTX 4070 Ti SUPER.
 
-## Ziel
+## Goals
 
-- RTX 4070 Ti SUPER 16 GB
 - Qwen3.8-27B `UD-Q3_K_XL`
-- mindestens 200K Context, 250K als Max-Profil
-- asymmetrischer TurboQuant-KV-Cache: `q8_0` für K, `turbo2` für V
-- TheTom `llama-cpp-turboquant` als Inferenz-Engine
-- `llama-swap` als dauerhaft laufender OpenAI-kompatibler Gateway
-- **kein Modell beim Boot geladen**; die ausgewählte Variante wird erst beim API-Request gestartet
-- Windows und CachyOS/Linux verwenden dieselben Model-IDs und dieselbe Gateway-Konfiguration
-- Hermes/OpenCode wählen Varianten einfach über den Model-ID
+- 200K context as the main profile, 250K as the maximum profile
+- TurboQuant KV cache with `q8_0` K + `turbo2` V
+- TheTom `llama-cpp-turboquant` as the inference engine
+- `llama-swap` as a persistent OpenAI-compatible gateway
+- no model loaded at startup; a model is launched only when requested
+- the same model IDs and API endpoint on Windows and Linux
+- easy use from Hermes, OpenCode, or any OpenAI-compatible client
 
-## Empfohlen: fertiges Docker-Image
+## Prebuilt Docker image
 
-Der normale Installationsweg soll **nicht mehr lokal kompilieren**. GitHub Actions baut CUDA + TurboQuant zentral und veröffentlicht das fertige Image als:
+The normal installation path does **not** compile CUDA or llama.cpp locally.
+
+Image:
 
 ```text
 ghcr.io/tmielsch/turboquant-setup:cuda
 ```
 
-Nach dem ersten veröffentlichten Build reicht auf einem NVIDIA-Docker-Host:
+If the GHCR package is public, no registry login is required.
+
+### Pull the image only
+
+This works from any directory:
+
+```bash
+docker pull ghcr.io/tmielsch/turboquant-setup:cuda
+```
+
+### Recommended: run with Docker Compose
+
+`docker compose` must be run from the cloned repository directory because `compose.yaml` and `llama-swap/config.yaml` are stored there.
 
 ```bash
 git clone https://github.com/tmielsch/turboquant-setup.git
 cd turboquant-setup
 cp .env.example .env
-# MODELS_DIR in .env bei Bedarf anpassen
+```
 
+Edit `.env` if your GGUF files are not in `./models`:
+
+```text
+MODELS_DIR=/path/to/your/models
+```
+
+Then:
+
+```bash
 docker compose pull
 docker compose up -d
 ```
 
-Danach:
+Check the gateway:
 
-- API: `http://127.0.0.1:9292/v1`
-- Model Discovery: `http://127.0.0.1:9292/v1/models`
-- Web UI: `http://127.0.0.1:9292/ui`
+```bash
+curl http://127.0.0.1:9292/v1/models
+```
 
-Der Container startet nur `llama-swap`. **Kein LLM wird beim Containerstart geladen.** Erst ein Request von Hermes/OpenCode startet den passenden TurboQuant `llama-server` im Container.
+Endpoints:
 
-Die Modelle selbst sind **nicht im Image**. `MODELS_DIR` wird nur nach `/models` gemountet, damit dieselben GGUFs unabhängig vom Betriebssystem weiterverwendet werden können.
+- OpenAI API: `http://127.0.0.1:9292/v1`
+- Model discovery: `http://127.0.0.1:9292/v1/models`
+- llama-swap UI: `http://127.0.0.1:9292/ui`
 
-### Host-Anforderungen
+The container starts only `llama-swap`. No LLM is loaded until a client requests one of the configured model IDs.
 
-**CachyOS / Linux:** Docker + funktionierender NVIDIA Container Runtime/Toolkit.
+## Requirements
 
-**Windows:** Docker Desktop mit WSL2 und funktionierendem NVIDIA-GPU-Passthrough.
+### Windows
 
-Der eigentliche CUDA-/CMake-Build findet in beiden Fällen nicht auf dem Zielrechner statt.
+- NVIDIA driver
+- Docker Desktop using the WSL2 backend
+- working NVIDIA GPU passthrough to Docker
 
-## Architektur
+### Linux
+
+- NVIDIA driver
+- Docker
+- NVIDIA Container Toolkit / working NVIDIA Docker runtime
+
+The CUDA/CMake build happens in GitHub Actions, not on the target machine.
+
+## Model files
+
+Models are **not included in the Docker image**. They are bind-mounted read-only from `MODELS_DIR` into `/models`.
+
+Expected filenames:
 
 ```text
-Hermes / OpenCode / andere OpenAI-Clients
+Qwen3.5-9B-Q4_K_M.gguf
+Qwen3.8-27B-UD-Q3_K_XL.gguf
+mtp-Qwen3.8-27B-Q4_0.gguf
+```
+
+The MTP draft model is only needed for the `-mtp` profiles.
+
+All Qwen3.8-27B profiles use the same main GGUF file. The 200K/250K/MTP variants are runtime configurations, not separate model copies and not separate Docker images.
+
+## Available model IDs
+
+| Model ID | Context | KV cache | MTP |
+|---|---:|---|---|
+| `qwen3.5-9b-32k` | 32K | `q8_0` K / `turbo3` V | No |
+| `qwen3.8-27b-200k` | 200K | `q8_0` K / `turbo2` V | No |
+| `qwen3.8-27b-250k` | 250K | `q8_0` K / `turbo2` V | No |
+| `qwen3.8-27b-200k-mtp` | 200K | `q8_0` K / `turbo2` V | Yes |
+| `qwen3.8-27b-250k-mtp` | 250K | `q8_0` K / `turbo2` V | Yes |
+
+## Architecture
+
+```text
+Hermes / OpenCode / OpenAI-compatible client
                  |
                  |  http://127.0.0.1:9292/v1
                  v
             llama-swap
                  |
-                 | model=qwen3.8-27b-250k
+                 |  requested model ID
                  v
-      TheTom llama-server (on demand)
+      TurboQuant llama-server (on demand)
                  |
-                 +-- Qwen3.8-27B GGUF (nur einmal auf Platte)
-                 +-- Context/KV/MTP je nach virtueller Model-ID
+                 +-- host-mounted GGUF
+                 +-- context / KV / MTP runtime profile
 ```
 
-`llama-swap` veröffentlicht die Varianten über `/v1/models`, lädt sie bei Bedarf und beendet beim Wechsel die vorherige Variante.
-
-## Verfügbare Model-IDs
-
-| Model-ID | Context | KV Cache | MTP |
-|---|---:|---|---|
-| `qwen3.5-9b-32k` | 32K | `q8_0` K / `turbo3` V | nein |
-| `qwen3.8-27b-200k` | 200K | `q8_0` K / `turbo2` V | nein |
-| `qwen3.8-27b-250k` | 250K | `q8_0` K / `turbo2` V | nein |
-| `qwen3.8-27b-200k-mtp` | 200K | `q8_0` K / `turbo2` V | ja |
-| `qwen3.8-27b-250k-mtp` | 250K | `q8_0` K / `turbo2` V | ja |
-
-Alle 27B-Varianten referenzieren **dieselbe** `Qwen3.8-27B-UD-Q3_K_XL.gguf`. Es werden keine Modellkopien angelegt.
+`llama-swap` exposes the virtual model IDs through `/v1/models`. Switching model IDs starts the matching `llama-server` command and stops the previous one when required.
 
 ## Hermes
 
-Hermes verwendet auf Windows und Linux denselben benannten Custom Provider `turboquant` mit `http://127.0.0.1:9292/v1`. Die per-model Context-Längen werden explizit mit 200K bzw. 250K hinterlegt.
+Use the gateway as a custom OpenAI-compatible provider:
 
-In einer laufenden Session z. B.:
+```yaml
+custom_providers:
+  - name: turboquant
+    base_url: http://127.0.0.1:9292/v1
+    models:
+      qwen3.5-9b-32k:
+        context_length: 32768
+      qwen3.8-27b-200k:
+        context_length: 200000
+      qwen3.8-27b-250k:
+        context_length: 250000
+      qwen3.8-27b-200k-mtp:
+        context_length: 200000
+      qwen3.8-27b-250k-mtp:
+        context_length: 250000
+```
+
+Example model switches:
 
 ```text
 /model custom:turboquant:qwen3.8-27b-200k
@@ -95,68 +160,64 @@ In einer laufenden Session z. B.:
 /model custom:turboquant:qwen3.8-27b-200k-mtp
 ```
 
-Die vollständige Hermes-Konfiguration steht in [docs/HERMES.md](docs/HERMES.md).
+See `docs/HERMES.md` for additional details.
 
 ## OpenCode
 
-OpenCode bekommt denselben OpenAI-kompatiblen Provider:
+Use the same OpenAI-compatible endpoint:
 
 ```text
-baseURL = http://127.0.0.1:9292/v1
+http://127.0.0.1:9292/v1
 ```
 
-Die Model-Auswahl kommt aus `/v1/models`; ein Wechsel des Model-IDs triggert automatisch den passenden llama-server.
+Model discovery is available through `/v1/models`.
 
-## Native Installation (Fallback / Entwicklung)
+## Troubleshooting
 
-Falls der Container selbst entwickelt oder ein Fork lokal getestet werden soll, bleiben die nativen Skripte erhalten.
+### `docker compose pull` says `no configuration file provided`
 
-### Windows
-
-```powershell
-.\scripts\windows\setup.ps1
-winget install llama-swap
-.\scripts\windows\start-gateway.ps1
-```
-
-Optionaler Autostart:
-
-```powershell
-.\scripts\windows\install-autostart.ps1
-```
-
-### CachyOS / Arch Linux
+You are not in the repository directory. Run:
 
 ```bash
-sudo pacman -S --needed base-devel git cmake cuda
-bash scripts/linux/setup.sh
-bash scripts/linux/start-gateway.sh
+git clone https://github.com/tmielsch/turboquant-setup.git
+cd turboquant-setup
+docker compose pull
 ```
 
-Optionaler Autostart:
+### `docker pull` returns a Docker Desktop `500 Internal Server Error`
+
+If the error references a local Docker Desktop pipe such as `dockerDesktopLinuxEngine`, first verify that the Docker engine itself is healthy:
 
 ```bash
-bash scripts/linux/install-autostart.sh
+docker version
+docker info
 ```
 
-## Direkter llama-server Start
+If the server section fails, fix/restart Docker Desktop before troubleshooting GHCR or this image. No project rebuild is required for that problem.
 
-Nur für Debugging/Benchmarks:
-
-```powershell
-.\scripts\windows\start-server.ps1 27b-200k
-```
+### Check container state and logs
 
 ```bash
-bash scripts/linux/start-server.sh 27b-200k
+docker compose ps
+docker compose logs -f
 ```
 
-## Container-Build
+## Native installation
 
-`docker/Dockerfile.cuda` kompiliert den aktuellen TheTom-Branch und legt `llama-swap` darüber. `.github/workflows/docker-cuda.yml` validiert den Build in Pull Requests und veröffentlicht nach Merge auf `main` automatisch das fertige `:cuda`-Image nach GHCR.
+Native Windows/Linux build scripts remain in the repository for development and debugging, but the prebuilt Docker image is the recommended path for normal use.
 
-`.dockerignore` schließt `models/`, lokale Engine-Builds und GGUFs explizit aus dem Build-Kontext aus.
+## Container build
+
+`docker/Dockerfile.cuda` builds a single CUDA/TurboQuant `llama-server` runtime plus `llama-swap`.
+
+GitHub Actions publishes:
+
+```text
+ghcr.io/tmielsch/turboquant-setup:cuda
+```
+
+The expensive CUDA build runs on `main` or via manual workflow dispatch. Runtime model/profile changes do not require rebuilding the image.
 
 ## Engine
 
-Aktuell: `TheTom/llama-cpp-turboquant`, Branch `feature/turboquant-kv-cache`.
+Inference engine: `TheTom/llama-cpp-turboquant`, branch `feature/turboquant-kv-cache`.
