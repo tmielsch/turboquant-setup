@@ -3,3 +3,4 @@ engine/
 build/
 *.part
 .superpowers/
+.env
