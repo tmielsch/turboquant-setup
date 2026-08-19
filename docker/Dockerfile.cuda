@@ -50,14 +50,16 @@ FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS runtime
 ARG LS_VER
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/app:/usr/local/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/app/lib:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
+# TheTom's own CUDA image keeps dynamically loaded ggml backend libraries next
+# to llama-server. Preserve that layout so GGML_BACKEND_DL discovery works.
+ENV LD_LIBRARY_PATH="/app:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl ca-certificates libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=turboquant-build /out/bin/llama-server /app/llama-server
 COPY --from=turboquant-build /out/bin/llama-bench /app/llama-bench
-COPY --from=turboquant-build /out/lib/ /app/lib/
+COPY --from=turboquant-build /out/lib/ /app/
 
 # llama-swap publishes official Linux amd64/arm64 release archives. This image is
 # intentionally linux/amd64 because the target desktop GPU stack is x86_64 NVIDIA.
