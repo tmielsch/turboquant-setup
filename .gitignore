@@ -2,3 +2,4 @@ models/
 engine/
 build/
 *.part
+.superpowers/
