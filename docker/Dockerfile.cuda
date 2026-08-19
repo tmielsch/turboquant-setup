@@ -1,11 +1,14 @@
-# Prebuilt TurboQuant + llama-swap runtime for NVIDIA GPUs.
+# Prebuilt TurboQuant + llama-swap runtime for the RTX 4070 Ti SUPER.
 # Build happens in GitHub Actions; target machines only pull the finished image.
+# Runtime model variants do NOT require separate builds: all llama-swap model IDs
+# use this one llama-server binary with different command-line arguments.
 
 ARG CUDA_VERSION=12.9.1
 ARG UBUNTU_VERSION=24.04
 ARG TQ_REPO=https://github.com/TheTom/llama-cpp-turboquant.git
 ARG TQ_BRANCH=feature/turboquant-kv-cache
-ARG CUDA_ARCHS="86;89"
+# Ada / RTX 4070 Ti SUPER. -real avoids generating extra PTX/architectures we do not use.
+ARG CUDA_ARCHS="89-real"
 ARG LS_VER=170
 
 # Build llama.cpp's embedded server UI exactly like the upstream CUDA image.
@@ -18,7 +21,7 @@ RUN git clone --depth 1 --branch "${TQ_BRANCH}" "${TQ_REPO}" /src
 WORKDIR /src/tools/ui
 RUN npm ci && npm run build
 
-# Compile TheTom TurboQuant llama.cpp fork with CUDA.
+# Compile one TurboQuant llama-server for sm_89 only.
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS turboquant-build
 ARG TQ_REPO
 ARG TQ_BRANCH
@@ -40,9 +43,9 @@ RUN cmake -B build \
       -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined \
-    && cmake --build build --config Release -j"$(nproc)" --target llama-server llama-bench
+    && cmake --build build --config Release -j"$(nproc)" --target llama-server
 RUN mkdir -p /out/lib /out/bin \
-    && cp build/bin/llama-server build/bin/llama-bench /out/bin/ \
+    && cp build/bin/llama-server /out/bin/ \
     && find build -name '*.so*' -exec cp -P {} /out/lib/ \;
 
 # Runtime: CUDA userspace + precompiled TurboQuant engine + llama-swap.
@@ -58,11 +61,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=turboquant-build /out/bin/llama-server /app/llama-server
-COPY --from=turboquant-build /out/bin/llama-bench /app/llama-bench
 COPY --from=turboquant-build /out/lib/ /app/
 
-# llama-swap publishes official Linux amd64/arm64 release archives. This image is
-# intentionally linux/amd64 because the target desktop GPU stack is x86_64 NVIDIA.
+# llama-swap release binary. The deployment target is x86_64 NVIDIA.
 RUN set -eux; \
     ARCH=amd64; \
     curl --fail -L \
