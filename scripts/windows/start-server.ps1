@@ -26,7 +26,7 @@ $args = @(
     "--port", $conf["PORT"]
 )
 if ($Profile -eq "27b" -and (Test-Path (Join-Path $Root $conf["MTP_DRAFT_27B"]))) {
-    $args += "--spec-type", "mtp", "--spec-draft-model", (Join-Path $Root $conf["MTP_DRAFT_27B"]), "--spec-draft-n-max", "3"
+    $args += "--spec-type", "draft-mtp", "--spec-draft-model", (Join-Path $Root $conf["MTP_DRAFT_27B"]), "--spec-draft-n-max", "3"
 }
 Write-Host "Starte llama-server (Profil $Profile):"
 Write-Host "  $server $($args -join ' ')"
