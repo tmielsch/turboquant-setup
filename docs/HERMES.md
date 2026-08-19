@@ -19,13 +19,13 @@ custom_providers:
     models:
       qwen3.5-9b-32k:
         context_length: 32768
+      qwen3.8-27b-64k:
+        context_length: 65536
+      qwen3.8-27b-128k:
+        context_length: 131072
       qwen3.8-27b-200k:
         context_length: 200000
       qwen3.8-27b-250k:
-        context_length: 250000
-      qwen3.8-27b-200k-mtp:
-        context_length: 200000
-      qwen3.8-27b-250k-mtp:
         context_length: 250000
 ```
 
@@ -34,10 +34,10 @@ Kein globales `model.context_length` setzen, weil dieser Wert die per-model Cont
 ## Wechsel in einer laufenden Hermes-Session
 
 ```text
+/model custom:turboquant:qwen3.8-27b-64k
+/model custom:turboquant:qwen3.8-27b-128k
 /model custom:turboquant:qwen3.8-27b-200k
 /model custom:turboquant:qwen3.8-27b-250k
-/model custom:turboquant:qwen3.8-27b-200k-mtp
-/model custom:turboquant:qwen3.8-27b-250k-mtp
 ```
 
 Beim Wechsel sendet Hermes den ausgewählten Model-ID an `llama-swap`. Falls eine andere Variante läuft, wird sie beendet und die neue llama-server-Commandline gestartet. Die 27B-GGUF selbst liegt nur einmal im `models/`-Ordner.

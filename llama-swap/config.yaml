@@ -21,44 +21,40 @@ models:
       -m "/models/Qwen3.5-9B-Q4_K_M.gguf"
       -fit on -fitt ${fit_target}
       -c 32768
-      -ctk q8_0 -ctv turbo3
+      -ctk turbo2 -ctv turbo3
       --flash-attn on --jinja -np 1
     capabilities:
       in: [text]
       out: [text]
       tools: true
       context: 32768
-  "qwen3.8-27b-200k":
-    name: "Qwen3.8 27B - 200K"
-    description: "Primary long-context profile. Asymmetric TurboQuant: q8_0 K + turbo2 V."
+  "qwen3.8-27b-128k":
+    name: "Qwen3.8 27B - 128K"
+    description: "Long context, ~15 tok/s decode."
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
       -m "/models/Qwen3.8-27B-UD-Q3_K_XL.gguf"
       -fit on -fitt ${fit_target}
-      -c 200000
-      -ctk q8_0 -ctv turbo2
+      -c 131072
+      -ctk turbo2 -ctv turbo2
       --flash-attn on --jinja -np 1
     capabilities:
       in: [text]
       out: [text]
       tools: true
-      context: 200000
-  "qwen3.8-27b-200k-mtp":
-    name: "Qwen3.8 27B - 200K + MTP"
-    description: "200K long-context profile with Qwen MTP speculative decoding."
+      context: 131072
+  "qwen3.8-27b-200k":
+    name: "Qwen3.8 27B - 200K"
+    description: "Maximum-context profile, ~11 tok/s decode."
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
       -m "/models/Qwen3.8-27B-UD-Q3_K_XL.gguf"
       -fit on -fitt ${fit_target}
       -c 200000
-      -ctk q8_0 -ctv turbo2
+      -ctk turbo2 -ctv turbo2
       --flash-attn on --jinja -np 1
-      --spec-type draft-mtp
-      --spec-draft-model "/models/mtp-Qwen3.8-27B-Q4_0.gguf"
-      --spec-draft-n-max 3
-      --spec-chain 8
     capabilities:
       in: [text]
       out: [text]
@@ -66,37 +62,33 @@ models:
       context: 200000
   "qwen3.8-27b-250k":
     name: "Qwen3.8 27B - 250K"
-    description: "Maximum-context profile. Asymmetric TurboQuant: q8_0 K + turbo2 V."
+    description: "Absolute maximum context, ~10 tok/s decode."
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
       -m "/models/Qwen3.8-27B-UD-Q3_K_XL.gguf"
       -fit on -fitt ${fit_target}
       -c 250000
-      -ctk q8_0 -ctv turbo2
+      -ctk turbo2 -ctv turbo2
       --flash-attn on --jinja -np 1
     capabilities:
       in: [text]
       out: [text]
       tools: true
       context: 250000
-  "qwen3.8-27b-250k-mtp":
-    name: "Qwen3.8 27B - 250K + MTP"
-    description: "250K maximum-context profile with Qwen MTP speculative decoding."
+  "qwen3.8-27b-64k":
+    name: "Qwen3.8 27B - 64K"
+    description: "Daily driver: full GPU residency, ~23 tok/s decode."
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
       -m "/models/Qwen3.8-27B-UD-Q3_K_XL.gguf"
       -fit on -fitt ${fit_target}
-      -c 250000
-      -ctk q8_0 -ctv turbo2
+      -c 65536
+      -ctk turbo2 -ctv turbo2
       --flash-attn on --jinja -np 1
-      --spec-type draft-mtp
-      --spec-draft-model "/models/mtp-Qwen3.8-27B-Q4_0.gguf"
-      --spec-draft-n-max 3
-      --spec-chain 8
     capabilities:
       in: [text]
       out: [text]
       tools: true
-      context: 250000
+      context: 65536

@@ -5,8 +5,8 @@ GPU** (tested with an RTX 4070 Ti SUPER), served through a single
 OpenAI-compatible API endpoint.
 
 - Qwen3.8-27B with **200K context** (250K as maximum profile)
-- TurboQuant KV cache (`q8_0` K + `turbo2` V) - up to ~10x less KV memory
-- MTP (Multi-Token Prediction) speculative decoding profiles for higher throughput
+- TurboQuant KV cache (`turbo2` K + `turbo2` V) - up to ~10x less KV memory
+- Measured 23 tok/s at 64K context on a 16 GB GPU (see model table below)
 - `llama-swap` as a persistent gateway: **no model loaded at startup**, models
   are loaded on demand and hot-swapped when you switch model IDs
 - Same model IDs and API endpoint on Windows and Linux
@@ -115,7 +115,8 @@ bash scripts/add-model.sh
 
 It asks for the GGUF file (local path or download URL), model ID, context
 size, KV cache options and an optional MTP draft, then updates the config and
-offers to restart the container.
+offers to restart the container. Note: MTP profiles only make sense on GPUs
+with 24+ GB VRAM (see the model table below).
 
 **Or by hand:** append a section to `models.conf`, then regenerate:
 
@@ -135,23 +136,25 @@ Full reference (options, KV cache choices, VRAM fit guide):
 
 ## Default model IDs
 
-| Model ID | Context | KV cache | MTP |
+| Model ID | Context | KV cache | Decode (16 GB GPU) |
 |---|---|---|---|
-| `qwen3.5-9b-32k` | 32K | `q8_0` K / `turbo3` V | No |
-| `qwen3.8-27b-200k` | 200K | `q8_0` K / `turbo2` V | No |
-| `qwen3.8-27b-250k` | 250K | `q8_0` K / `turbo2` V | No |
-| `qwen3.8-27b-200k-mtp` | 200K | `q8_0` K / `turbo2` V | Yes |
-| `qwen3.8-27b-250k-mtp` | 250K | `q8_0` K / `turbo2` V | Yes |
+| `qwen3.5-9b-32k` | 32K | `q8_0` K / `turbo3` V | ~40+ tok/s |
+| `qwen3.8-27b-64k` | 64K | `turbo2` K / `turbo2` V | ~23 tok/s |
+| `qwen3.8-27b-128k` | 128K | `turbo2` K / `turbo2` V | ~15 tok/s |
+| `qwen3.8-27b-200k` | 200K | `turbo2` K / `turbo2` V | ~11 tok/s |
+| `qwen3.8-27b-250k` | 250K | `turbo2` K / `turbo2` V | ~10 tok/s |
 
-The 200K/250K/MTP variants all use the same main GGUF file - they are runtime
-profiles, not separate model copies.
+All 27B variants use the same main GGUF file - they are runtime profiles, not
+separate model copies. Decode speed drops as the reserved KV cache grows, so
+use the smallest context that covers your workload. MTP profiles are not
+viable on a 16 GB card (the draft expands to ~12.9 GB in VRAM).
 
 ## Usage
 
 ```bash
 curl http://127.0.0.1:9292/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"qwen3.8-27b-200k","messages":[{"role":"user","content":"Hello!"}]}'
+  -d '{"model":"qwen3.8-27b-64k","messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
 The first request loads the model into VRAM (10-30 s on NVMe), subsequent
@@ -168,17 +171,17 @@ custom_providers:
     models:
       qwen3.5-9b-32k:
         context_length: 32768
+      qwen3.8-27b-64k:
+        context_length: 65536
+      qwen3.8-27b-128k:
+        context_length: 131072
       qwen3.8-27b-200k:
         context_length: 200000
       qwen3.8-27b-250k:
         context_length: 250000
-      qwen3.8-27b-200k-mtp:
-        context_length: 200000
-      qwen3.8-27b-250k-mtp:
-        context_length: 250000
 ```
 
-Model switches: `/model custom:turboquant:qwen3.8-27b-200k`
+Model switches: `/model custom:turboquant:qwen3.8-27b-64k`
 
 ### OpenCode
 

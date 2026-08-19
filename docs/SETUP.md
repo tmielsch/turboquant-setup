@@ -1,11 +1,11 @@
 # Setup
 
-> **Hinweis:** Der empfohlene Weg ist das vorgebaute Docker-Image
-> (siehe README). Dieser Abschnitt beschreibt die native Installation für
-> Entwicklung und Debugging - sie kompiliert die Engine aus dem Quellcode
-> (CUDA/CMake) und dauert deutlich länger.
+## Architektur
 
-## Gemeinsame Architektur
+Das Setup besteht aus zwei Schichten:
+
+1. **`llama-swap`** als Gateway: läuft dauerhaft und nimmt API-Anfragen entgegen.
+2. **`llama-server`** (TurboQuant-Fork) als Engine: wird von llama-swap bei Bedarf pro Modell-Profil gestartet.
 
 Windows und CachyOS/Linux verwenden dieselbe `scripts/common/profiles.conf` und dieselbe `llama-swap/config.yaml`. `llama-swap` läuft dauerhaft auf `127.0.0.1:9292`; ein Modell wird erst geladen, wenn Hermes/OpenCode eine der virtuellen Model-IDs anfordert.
 
@@ -14,10 +14,10 @@ Unter Docker wird `llama-swap/config.yaml` automatisch aus `models.conf` generie
 ### Verfügbare Model-IDs
 
 - `qwen3.5-9b-32k`
+- `qwen3.8-27b-64k` (schnellstes 27B-Profil, ~23 tok/s)
+- `qwen3.8-27b-128k`
 - `qwen3.8-27b-200k`
 - `qwen3.8-27b-250k`
-- `qwen3.8-27b-200k-mtp`
-- `qwen3.8-27b-250k-mtp`
 
 Die 27B-Varianten nutzen dieselbe GGUF-Datei mit unterschiedlichen Runtime-Parametern.
 

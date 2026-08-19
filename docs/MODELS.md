@@ -60,32 +60,45 @@ offers to restart the container.
 The K and V caches can be quantized independently. K should always be more
 precise than V:
 
-| `kv_k` | meaning          | `kv_v` | meaning                               |
-|--------|------------------|--------|---------------------------------------|
-| `q8_0` | 8-bit K cache    | `turbo2` | ~2-bit V cache (long contexts)     |
-| `q8_0` | 8-bit K cache    | `turbo3` | ~3-bit V cache (slightly safer)    |
-| `q8_0` | 8-bit K cache    | `turbo4` | ~4-bit V cache (most conservative) |
-| `f16`  | full precision   | `f16`   | no quantization (only for small ctx)  |
+| `kv_k`    | meaning                | `kv_v`    | meaning                             |
+|-----------|------------------------|-----------|-------------------------------------|
+| `turbo2`  | ~2-bit K cache         | `turbo2`  | ~2-bit V cache (long contexts)      |
+| `turbo2`  | ~2-bit K cache         | `turbo3`  | ~3-bit V cache (slightly safer)     |
+| `q8_0`    | 8-bit K cache          | `turbo2`  | ~2-bit V cache (pre-turbo2-K setup) |
+| `f16`     | full precision         | `f16`     | no quantization (only for small ctx)|
 
-Lower bit V caches free more VRAM for context length, at the cost of some
-fidelity. `turbo2` is the long-context lever: with it, a 13 GB model reaches
-200K-250K context on a 16 GB GPU.
+Allowed values for both caches: `f16`, `bf16`, `q8_0`, `q4_0`, `q4_1`,
+`iq4_nl`, `q5_0`, `q5_1`, `turbo2`, `turbo3`, `turbo4`.
+
+**Use `turbo2` for K on GQA models** (e.g. Qwen3.8-27B: 24 heads, 4 KV
+heads). The engine's auto-asymmetric logic upgrades K back to `q8_0` in that
+case ("upgrading K from turbo2 to q8_0 to prevent quality degradation"),
+which makes the KV cache ~4x bigger - a 13 GB model then no longer fits at
+200K and gets CPU-offloaded (measured: ~3-4 tok/s instead of 23+). To keep
+`turbo2` K, set `TURBO_AUTO_ASYMMETRIC=0` in `compose.yaml`.
+
+MTP draft models expand to the full model size in VRAM when loaded (the
+27B draft GGUF needs ~12.9 GB), so **MTP profiles do not fit on a 16 GB
+card** together with the main model (measured: 1.9 tok/s).
 
 ## Does my model fit into VRAM?
 
 Rule of thumb for a 16 GB GPU with the TurboQuant KV cache
-(`q8_0` K + `turbo2` V):
+(`turbo2` K + `turbo2` V):
 
-| model size | max context (approx.) |
-|------------|-----------------------|
-| ~4-6 GB    | 128K-250K             |
-| ~9-10 GB   | 64K-128K              |
-| ~13 GB     | 200K-250K             |
-| ~18 GB+    | does not fit          |
+| model size | max context (approx.) | decode speed (approx.) |
+|------------|-----------------------|------------------------|
+| ~4-6 GB    | 128K-250K             | 40+ tok/s              |
+| ~9-10 GB   | 64K-128K              | 30+ tok/s              |
+| ~13 GB     | 64K                   | ~23 tok/s (measured)   |
+| ~13 GB     | 128K                  | ~15 tok/s (measured)   |
+| ~13 GB     | 200K-250K             | ~11 tok/s (measured)   |
 
-`-fit on` (set in every generated profile) automatically moves KV-cache
-offload buffers out of VRAM when the model does not fit, so the profile still
-starts - but slower. Prefer a smaller quantization of your model over a
+Decode speed drops as the reserved KV cache grows, even when it is almost
+empty: the 27B profile measured 41.5 tok/s at 8K, 22.9 at 64K, 14.6 at 128K
+and 10.9 at 200K. `-fit on` (set in every generated profile) automatically
+moves KV-cache offload buffers out of VRAM when the model does not fit, so
+the profile still starts - but slower. Prefer a smaller context size over a
 partial offload.
 
 ## Loading a model

@@ -136,11 +136,14 @@ EOF
       --flash-attn on --jinja -np 1
 EOF
         if [[ -n "$local_mtp" ]]; then
+            local_draft_kvk="${M[kv_k_draft]:-turbo2}"
+            local_draft_kvv="${M[kv_v_draft]:-turbo2}"
             cat <<EOF
       --spec-type draft-mtp
       --spec-draft-model $(yq_str "/models/$local_mtp")
       --spec-draft-n-max 3
       --spec-chain 8
+      -ctkd $local_draft_kvk -ctvd $local_draft_kvv
 EOF
         fi
         cat <<EOF
