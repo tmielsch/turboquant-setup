@@ -1,0 +1,82 @@
+# Prebuilt TurboQuant + llama-swap runtime for the RTX 4070 Ti SUPER.
+# Build happens in GitHub Actions; target machines only pull the finished image.
+# Runtime model variants do NOT require separate builds: all llama-swap model IDs
+# use this one llama-server binary with different command-line arguments.
+
+ARG CUDA_VERSION=12.9.1
+ARG UBUNTU_VERSION=24.04
+ARG TQ_REPO=https://github.com/TheTom/llama-cpp-turboquant.git
+ARG TQ_BRANCH=feature/turboquant-kv-cache
+# Ada / RTX 4070 Ti SUPER. -real avoids generating extra PTX/architectures we do not use.
+ARG CUDA_ARCHS="89-real"
+ARG LS_VER=170
+
+# Build llama.cpp's embedded server UI exactly like the upstream CUDA image.
+FROM node:24 AS web
+ARG TQ_REPO
+ARG TQ_BRANCH
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch "${TQ_BRANCH}" "${TQ_REPO}" /src
+WORKDIR /src/tools/ui
+RUN npm ci && npm run build
+
+# Compile one TurboQuant llama-server for sm_89 only.
+FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} AS turboquant-build
+ARG TQ_REPO
+ARG TQ_BRANCH
+ARG CUDA_ARCHS
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential cmake git ca-certificates gcc-14 g++-14 libssl-dev libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+ENV CC=gcc-14 CXX=g++-14 CUDAHOSTCXX=g++-14
+RUN git clone --depth 1 --branch "${TQ_BRANCH}" "${TQ_REPO}" /src
+COPY --from=web /src/tools/ui/dist /src/tools/ui/dist
+WORKDIR /src
+RUN cmake -B build \
+      -DGGML_NATIVE=OFF \
+      -DGGML_CUDA=ON \
+      -DGGML_BACKEND_DL=ON \
+      -DGGML_CPU_ALL_VARIANTS=ON \
+      -DLLAMA_BUILD_TESTS=OFF \
+      -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined \
+    && cmake --build build --config Release -j"$(nproc)" --target llama-server
+RUN mkdir -p /out/lib /out/bin \
+    && cp build/bin/llama-server /out/bin/ \
+    && find build -name '*.so*' -exec cp -P {} /out/lib/ \;
+
+# Runtime: CUDA userspace + precompiled TurboQuant engine + llama-swap.
+FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS runtime
+ARG LS_VER
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/app:/usr/local/bin:${PATH}"
+# TheTom's own CUDA image keeps dynamically loaded ggml backend libraries next
+# to llama-server. Preserve that layout so GGML_BACKEND_DL discovery works.
+ENV LD_LIBRARY_PATH="/app:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl ca-certificates libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=turboquant-build /out/bin/llama-server /app/llama-server
+COPY --from=turboquant-build /out/lib/ /app/
+
+# llama-swap release binary. The deployment target is x86_64 NVIDIA.
+RUN set -eux; \
+    ARCH=amd64; \
+    curl --fail -L \
+      "https://github.com/mostlygeek/llama-swap/releases/download/v${LS_VER}/llama-swap_${LS_VER}_linux_${ARCH}.tar.gz" \
+      -o /tmp/llama-swap.tar.gz; \
+    tar -xzf /tmp/llama-swap.tar.gz -C /tmp; \
+    install -m 0755 /tmp/llama-swap /usr/local/bin/llama-swap; \
+    rm -rf /tmp/llama-swap*; \
+    mkdir -p /models /config
+
+WORKDIR /models
+EXPOSE 9292
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:9292/health || exit 1
+ENTRYPOINT ["llama-swap"]
+CMD ["-config", "/config/config.yaml", "-listen", "0.0.0.0:9292", "-watch-config"]

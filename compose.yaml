@@ -1,0 +1,33 @@
+services:
+  turboquant:
+    image: ghcr.io/tmielsch/turboquant-setup:cuda
+    container_name: turboquant
+    restart: unless-stopped
+
+    ports:
+      - "9292:9292"
+
+    volumes:
+      - "${MODELS_DIR:-./models}:/models:ro"
+      - "./llama-swap/config.yaml:/config/config.yaml:ro"
+
+    environment:
+      TQ_ENGINE: /app/llama-server
+      TQ_MODEL_9B: /models/Qwen3.5-9B-Q4_K_M.gguf
+      TQ_MODEL_27B: /models/Qwen3.8-27B-UD-Q3_K_XL.gguf
+      TQ_MTP_DRAFT_27B: /models/mtp-Qwen3.8-27B-Q4_0.gguf
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9292/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

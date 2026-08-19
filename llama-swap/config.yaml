@@ -1,0 +1,108 @@
+# llama-swap: virtual model IDs -> TheTom llama.cpp TurboQuant launch profiles.
+# Machine-specific paths are injected through environment variables by
+# scripts/windows/start-gateway.ps1 (and later the Linux/macOS launchers).
+
+startPort: 5800
+sendLoadingState: false
+globalTTL: 0
+
+macros:
+  engine: "${env.TQ_ENGINE}"
+  model_9b: "${env.TQ_MODEL_9B}"
+  model_27b: "${env.TQ_MODEL_27B}"
+  mtp_27b: "${env.TQ_MTP_DRAFT_27B}"
+  fit_target: 512
+
+models:
+  "qwen3.5-9b-32k":
+    name: "Qwen3.5 9B — 32K"
+    description: "Smoke-test / lightweight profile. q8_0 K + turbo3 V."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "${model_9b}"
+      -fit on -fitt ${fit_target}
+      -c 32768
+      -ctk q8_0 -ctv turbo3
+      --flash-attn on --jinja -np 1
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 32768
+
+  "qwen3.8-27b-200k":
+    name: "Qwen3.8 27B — 200K"
+    description: "Primary long-context profile. Asymmetric TurboQuant: q8_0 K + turbo2 V."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "${model_27b}"
+      -fit on -fitt ${fit_target}
+      -c 200000
+      -ctk q8_0 -ctv turbo2
+      --flash-attn on --jinja -np 1
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 200000
+
+  "qwen3.8-27b-250k":
+    name: "Qwen3.8 27B — 250K"
+    description: "Maximum-context profile. Asymmetric TurboQuant: q8_0 K + turbo2 V."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "${model_27b}"
+      -fit on -fitt ${fit_target}
+      -c 250000
+      -ctk q8_0 -ctv turbo2
+      --flash-attn on --jinja -np 1
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 250000
+
+  "qwen3.8-27b-200k-mtp":
+    name: "Qwen3.8 27B — 200K + MTP"
+    description: "200K long-context profile with Qwen MTP speculative decoding."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "${model_27b}"
+      -fit on -fitt ${fit_target}
+      -c 200000
+      -ctk q8_0 -ctv turbo2
+      --flash-attn on --jinja -np 1
+      --spec-type draft-mtp
+      --spec-draft-model "${mtp_27b}"
+      --spec-draft-n-max 3
+      --spec-chain 8
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 200000
+
+  "qwen3.8-27b-250k-mtp":
+    name: "Qwen3.8 27B — 250K + MTP"
+    description: "250K maximum-context profile with Qwen MTP speculative decoding."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "${model_27b}"
+      -fit on -fitt ${fit_target}
+      -c 250000
+      -ctk q8_0 -ctv turbo2
+      --flash-attn on --jinja -np 1
+      --spec-type draft-mtp
+      --spec-draft-model "${mtp_27b}"
+      --spec-draft-n-max 3
+      --spec-chain 8
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 250000
