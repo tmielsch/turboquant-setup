@@ -12,18 +12,115 @@ macros:
   fit_target: "512"
 
 models:
-  "deepseek-v4-flash-64k":
-    name: "DeepSeek V4 Flash - 64K"
-    description: "DeepSeek V4 Flash 0731 (284B MoE, 21B active, MXFP4 routed experts). CPU-MoE: all 137 GiB routed experts run on CPU, ~13.7 GiB BF16 backbone on GPU. FP16 KV mandatory for V4 arch (quantized KV silently corrupts). Slow decode on 16 GB GPU."
+  "deepseek-v4-flash-128k":
+    name: "DeepSeek V4 Flash - 128K"
+    description: "Config-I, FP16 KV, CPU-MoE + moe-cache on. MLA latent KV cache, 128K context."
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
-      -m "/models/DeepSeek-V4-Flash-0731-UD-Q8_K_XL/UD-Q8_K_XL/DeepSeek-V4-Flash-0731-UD-Q8_K_XL-00001-of-00005.gguf"
+      -m "/models/DeepSeek-V4-Flash-ConfigI-GGUF/DeepSeek-V4-Flash-0731-ConfigI-00001-of-00003.gguf"
+      -fit on -fitt ${fit_target}
+      -c 131072
+      -ctk f16 -ctv f16
+      --flash-attn on --jinja -np 1
+      --moe-cache on
+      -cmoe
+      --dry-multiplier 0.8 --dry-base 1.75
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 131072
+  "deepseek-v4-flash-256k":
+    name: "DeepSeek V4 Flash - 256K"
+    description: "Config-I, FP16 KV, CPU-MoE + moe-cache on. 256K context."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "/models/DeepSeek-V4-Flash-ConfigI-GGUF/DeepSeek-V4-Flash-0731-ConfigI-00001-of-00003.gguf"
+      -fit on -fitt ${fit_target}
+      -c 262144
+      -ctk f16 -ctv f16
+      --flash-attn on --jinja -np 1
+      --moe-cache on
+      -cmoe
+      --dry-multiplier 0.8 --dry-base 1.75
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 262144
+  "deepseek-v4-flash-256k-turbo":
+    name: "DeepSeek V4 Flash - 256K Turbo KV"
+    description: "Config-I, TurboQuant KV (turbo2/turbo2) instead of FP16 - test profile, quantized KV is reported to silently corrupt V4 arch."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "/models/DeepSeek-V4-Flash-ConfigI-GGUF/DeepSeek-V4-Flash-0731-ConfigI-00001-of-00003.gguf"
+      -fit on -fitt ${fit_target}
+      -c 262144
+      -ctk turbo2 -ctv turbo2
+      --flash-attn on --jinja -np 1
+      --moe-cache on
+      -cmoe
+      --dry-multiplier 0.8 --dry-base 1.75
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 262144
+  "deepseek-v4-flash-512k":
+    name: "DeepSeek V4 Flash - 512K"
+    description: "Config-I, FP16 KV, CPU-MoE + moe-cache on. 512K context, KV cache will mostly run on CPU."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "/models/DeepSeek-V4-Flash-ConfigI-GGUF/DeepSeek-V4-Flash-0731-ConfigI-00001-of-00003.gguf"
+      -fit on -fitt ${fit_target}
+      -c 524288
+      -ctk f16 -ctv f16
+      --flash-attn on --jinja -np 1
+      --moe-cache on
+      -cmoe
+      --dry-multiplier 0.8 --dry-base 1.75
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 524288
+  "deepseek-v4-flash-512k-turbo":
+    name: "DeepSeek V4 Flash - 512K Turbo KV"
+    description: "Config-I, TurboQuant KV (turbo2/turbo2) instead of FP16 - test profile, quantized KV is reported to silently corrupt V4 arch."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "/models/DeepSeek-V4-Flash-ConfigI-GGUF/DeepSeek-V4-Flash-0731-ConfigI-00001-of-00003.gguf"
+      -fit on -fitt ${fit_target}
+      -c 524288
+      -ctk turbo2 -ctv turbo2
+      --flash-attn on --jinja -np 1
+      --moe-cache on
+      -cmoe
+      --dry-multiplier 0.8 --dry-base 1.75
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 524288
+  "deepseek-v4-flash-64k":
+    name: "DeepSeek V4 Flash - 64K"
+    description: "DeepSeek V4 Flash 0731 Config-I (284B MoE, 21B active, 2.88 bpw, 96 GiB). CPU-MoE (all experts RAM-resident) + moe-cache on: hottest experts compute on GPU, rest stays in RAM. FP16 KV mandatory (quantized KV silently corrupts). DRY anti-loop sampling."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "/models/DeepSeek-V4-Flash-ConfigI-GGUF/DeepSeek-V4-Flash-0731-ConfigI-00001-of-00003.gguf"
       -fit on -fitt ${fit_target}
       -c 65536
       -ctk f16 -ctv f16
       --flash-attn on --jinja -np 1
+      --moe-cache on
       -cmoe
+      --dry-multiplier 0.8 --dry-base 1.75
     capabilities:
       in: [text]
       out: [text]

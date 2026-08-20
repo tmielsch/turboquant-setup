@@ -120,6 +120,7 @@ EOF
         local_mtp="${M[mtp_draft]:-}"
         local_moec="${M[moe_cache]:-}"
         local_cpumoe="${M[cpu_moe]:-false}"
+        local_extra="${M[extra_args]:-}"
         local_tools="${M[tools]:-true}"
 
         printf '  %s:\n' "$(yq_str "$local_id")"
@@ -146,6 +147,9 @@ EOF
             cat <<EOF
       -cmoe
 EOF
+        fi
+        if [[ -n "$local_extra" ]]; then
+            printf '      %s\n' "$local_extra"
         fi
         if [[ -n "$local_mtp" ]]; then
             local_draft_kvk="${M[kv_k_draft]:-turbo2}"
