@@ -12,13 +12,30 @@ macros:
   fit_target: "512"
 
 models:
+  "deepseek-v4-flash-64k":
+    name: "DeepSeek V4 Flash - 64K"
+    description: "DeepSeek V4 Flash 0731 (284B MoE, 21B active, MXFP4 routed experts). CPU-MoE: all 137 GiB routed experts run on CPU, ~13.7 GiB BF16 backbone on GPU. FP16 KV mandatory for V4 arch (quantized KV silently corrupts). Slow decode on 16 GB GPU."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "/models/DeepSeek-V4-Flash-0731-UD-Q8_K_XL/UD-Q8_K_XL/DeepSeek-V4-Flash-0731-UD-Q8_K_XL-00001-of-00005.gguf"
+      -fit on -fitt ${fit_target}
+      -c 65536
+      -ctk f16 -ctv f16
+      --flash-attn on --jinja -np 1
+      -cmoe
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 65536
   "qwen3.5-9b-32k":
     name: "Qwen3.5 9B - 32K"
     description: "Smoke-test / lightweight profile. q8_0 K + turbo3 V."
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
-      -m "/models/Qwen3.5-9B-Q4_K_M.gguf"
+      -m "/models/gguf/Qwen3.5-9B-Q4_K_M.gguf"
       -fit on -fitt ${fit_target}
       -c 32768
       -ctk turbo2 -ctv turbo3
@@ -34,7 +51,7 @@ models:
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
-      -m "/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"
+      -m "/models/gguf/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"
       -fit on -fitt ${fit_target}
       -c 250000
       -ctk turbo2 -ctv turbo2
@@ -51,7 +68,7 @@ models:
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
-      -m "/models/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf"
+      -m "/models/gguf/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf"
       -fit on -fitt ${fit_target}
       -c 250000
       -ctk turbo2 -ctv turbo2
@@ -67,7 +84,7 @@ models:
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
-      -m "/models/Qwen3.6-35B-A3B-UD-Q6_K.gguf"
+      -m "/models/gguf/Qwen3.6-35B-A3B-UD-Q6_K.gguf"
       -fit on -fitt ${fit_target}
       -c 250000
       -ctk turbo2 -ctv turbo2
@@ -84,7 +101,7 @@ models:
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
-      -m "/models/Qwen3.6-35B-A3B-Q8_0.gguf"
+      -m "/models/gguf/Qwen3.6-35B-A3B-Q8_0.gguf"
       -fit on -fitt ${fit_target}
       -c 250000
       -ctk turbo2 -ctv turbo2
@@ -101,7 +118,7 @@ models:
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
-      -m "/models/Qwen3.8-27B-UD-Q3_K_XL.gguf"
+      -m "/models/gguf/Qwen3.8-27B-UD-Q3_K_XL.gguf"
       -fit on -fitt ${fit_target}
       -c 131072
       -ctk turbo2 -ctv turbo2
@@ -117,7 +134,7 @@ models:
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
-      -m "/models/Qwen3.8-27B-UD-Q3_K_XL.gguf"
+      -m "/models/gguf/Qwen3.8-27B-UD-Q3_K_XL.gguf"
       -fit on -fitt ${fit_target}
       -c 200000
       -ctk turbo2 -ctv turbo2
@@ -133,7 +150,7 @@ models:
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
-      -m "/models/Qwen3.8-27B-UD-Q3_K_XL.gguf"
+      -m "/models/gguf/Qwen3.8-27B-UD-Q3_K_XL.gguf"
       -fit on -fitt ${fit_target}
       -c 250000
       -ctk turbo2 -ctv turbo2
@@ -149,7 +166,7 @@ models:
     cmd: |
       "${engine}" --host 127.0.0.1 --port ${PORT}
       --alias ${MODEL_ID}
-      -m "/models/Qwen3.8-27B-UD-Q3_K_XL.gguf"
+      -m "/models/gguf/Qwen3.8-27B-UD-Q3_K_XL.gguf"
       -fit on -fitt ${fit_target}
       -c 65536
       -ctk turbo2 -ctv turbo2

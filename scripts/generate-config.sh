@@ -119,6 +119,7 @@ EOF
         local_kvv="${M[kv_v]:-$KV_V_DEF}"
         local_mtp="${M[mtp_draft]:-}"
         local_moec="${M[moe_cache]:-}"
+        local_cpumoe="${M[cpu_moe]:-false}"
         local_tools="${M[tools]:-true}"
 
         printf '  %s:\n' "$(yq_str "$local_id")"
@@ -139,6 +140,11 @@ EOF
         if [[ -n "$local_moec" ]]; then
             cat <<EOF
       --moe-cache $local_moec
+EOF
+        fi
+        if [[ "$local_cpumoe" == "true" ]]; then
+            cat <<EOF
+      -cmoe
 EOF
         fi
         if [[ -n "$local_mtp" ]]; then
