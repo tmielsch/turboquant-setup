@@ -9,7 +9,7 @@ Das Setup besteht aus zwei Schichten:
 
 Windows und CachyOS/Linux verwenden dieselbe `scripts/common/profiles.conf` und dieselbe `llama-swap/config.yaml`. `llama-swap` läuft dauerhaft auf `127.0.0.1:9292`; ein Modell wird erst geladen, wenn Hermes/OpenCode eine der virtuellen Model-IDs anfordert.
 
-Unter Docker wird `llama-swap/config.yaml` automatisch aus `models.conf` generiert (`bash scripts/generate-config.sh`); Modelle werden über `models.conf` bzw. `scripts/add-model.sh` verwaltet - Details in `docs/MODELS.md`. Die nativen Skripte hier setzen die Pfade über `profiles.conf` und Umgebungsvariablen.
+Unter Docker wird `llama-swap/config.yaml` automatisch aus `models.conf` generiert (`bash scripts/generate-config.sh`); Modelle werden über `models.conf` bzw. `scripts/add-model.sh` verwaltet - Details in `docs/ADDING_MODELS.md`. Die nativen Skripte hier setzen die Pfade über `profiles.conf` und Umgebungsvariablen.
 
 ### Verfügbare Model-IDs
 

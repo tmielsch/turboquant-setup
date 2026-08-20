@@ -39,7 +39,7 @@ requesting a different ID swaps them.
 ## Requirements
 
 - NVIDIA GPU with at least 16 GB VRAM (other sizes work, adjust models
-  accordingly - see [docs/MODELS.md](docs/MODELS.md))
+  accordingly - see [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md))
 - NVIDIA driver (CUDA-capable)
 - Docker with working NVIDIA GPU passthrough:
   - **Linux:** Docker + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
@@ -132,7 +132,9 @@ docker compose restart turboquant
 ```
 
 Full reference (options, KV cache choices, VRAM fit guide):
-[docs/MODELS.md](docs/MODELS.md).
+[docs/ADDING_MODELS.md](docs/ADDING_MODELS.md).
+
+Automated coding agents should read [`AGENTS.md`](AGENTS.md) before modifying this repository. It defines the architecture boundaries and the rules for avoiding unnecessary builds, downloads, CI runs, and other expensive side effects.
 
 ## Default model IDs
 
@@ -220,7 +222,7 @@ sudo usermod -aG docker "$USER"
 The model + KV cache does not fit in VRAM and parts are offloaded to system
 RAM. Either use a smaller quantization of the model, reduce the context size,
 or use a more aggressive V-cache quantization (see
-[docs/MODELS.md](docs/MODELS.md)).
+[docs/ADDING_MODELS.md](docs/ADDING_MODELS.md)).
 
 ### Check container state and logs
 
