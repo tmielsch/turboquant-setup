@@ -174,9 +174,9 @@ custom_providers:
 Example model switches:
 
 ```text
-/model custom:turquant:qwen3.8-27b-200k
-/model custom:turquant:qwen3.8-27b-250k
-/model custom:turquant:qwen3.8-27b-200k-mtp
+/model custom:turboquant:qwen3.8-27b-200k
+/model custom:turboquant:qwen3.8-27b-250k
+/model custom:turboquant:qwen3.8-27b-200k-mtp
 ```
 
 See `docs/HERMES.md` for additional details.
