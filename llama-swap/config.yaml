@@ -45,6 +45,56 @@ models:
       out: [text]
       tools: true
       context: 250000
+  "qwen3.6-35b-a3b-bf16-250k":
+    name: "Qwen3.6 35B A3B - BF16 250K"
+    description: "Full-precision BF16 (2-part split). MoE cache does NOT support BF16 matvec, so decode streams experts over PCIe (slow decode, best quality)."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "/models/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf"
+      -fit on -fitt ${fit_target}
+      -c 250000
+      -ctk turbo2 -ctv turbo2
+      --flash-attn on --jinja -np 1
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 250000
+  "qwen3.6-35b-a3b-q6-250k":
+    name: "Qwen3.6 35B A3B - Q6_K 250K"
+    description: "Mid-quality 6-bit UD variant, MoE cache enabled."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "/models/Qwen3.6-35B-A3B-UD-Q6_K.gguf"
+      -fit on -fitt ${fit_target}
+      -c 250000
+      -ctk turbo2 -ctv turbo2
+      --flash-attn on --jinja -np 1
+      --moe-cache soft
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 250000
+  "qwen3.6-35b-a3b-q8-250k":
+    name: "Qwen3.6 35B A3B - Q8_0 250K"
+    description: "High-quality 8-bit variant (non-UD), MoE cache enabled."
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "/models/Qwen3.6-35B-A3B-Q8_0.gguf"
+      -fit on -fitt ${fit_target}
+      -c 250000
+      -ctk turbo2 -ctv turbo2
+      --flash-attn on --jinja -np 1
+      --moe-cache soft
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 250000
   "qwen3.8-27b-128k":
     name: "Qwen3.8 27B - 128K"
     description: "Long context, ~15 tok/s decode."
