@@ -118,6 +118,7 @@ EOF
         local_kvk="${M[kv_k]:-$KV_K_DEF}"
         local_kvv="${M[kv_v]:-$KV_V_DEF}"
         local_mtp="${M[mtp_draft]:-}"
+        local_moec="${M[moe_cache]:-}"
         local_tools="${M[tools]:-true}"
 
         printf '  %s:\n' "$(yq_str "$local_id")"
@@ -135,6 +136,11 @@ EOF
       -ctk $local_kvk -ctv $local_kvv
       --flash-attn on --jinja -np 1
 EOF
+        if [[ -n "$local_moec" ]]; then
+            cat <<EOF
+      --moe-cache $local_moec
+EOF
+        fi
         if [[ -n "$local_mtp" ]]; then
             local_draft_kvk="${M[kv_k_draft]:-turbo2}"
             local_draft_kvv="${M[kv_v_draft]:-turbo2}"
