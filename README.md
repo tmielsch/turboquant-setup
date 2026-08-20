@@ -102,6 +102,25 @@ The MTP draft model is only needed for the `-mtp` profiles.
 
 All Qwen3.8-27B profiles use the same main GGUF file. The 200K/250K/MTP variants are runtime configurations, not separate model copies and not separate Docker images.
 
+## Adding or installing models
+
+Adding a GGUF is a runtime configuration task, not an image build.
+
+The normal flow is:
+
+```text
+GGUF in host MODELS_DIR
+    -> mounted as /models/<filename>.gguf
+    -> add a profile in llama-swap/config.yaml
+    -> verify the model ID through /v1/models
+```
+
+Do **not** rebuild the CUDA image merely to add a model or change context/KV/MTP parameters.
+
+See [`docs/ADDING_MODELS.md`](docs/ADDING_MODELS.md) for the complete model installation workflow.
+
+Automated coding agents should read [`AGENTS.md`](AGENTS.md) before modifying this repository. It defines the architecture boundaries and the rules for avoiding unnecessary builds, downloads, CI runs, and other expensive side effects.
+
 ## Available model IDs
 
 | Model ID | Context | KV cache | MTP |
@@ -155,9 +174,9 @@ custom_providers:
 Example model switches:
 
 ```text
-/model custom:turboquant:qwen3.8-27b-200k
-/model custom:turboquant:qwen3.8-27b-250k
-/model custom:turboquant:qwen3.8-27b-200k-mtp
+/model custom:turquant:qwen3.8-27b-200k
+/model custom:turquant:qwen3.8-27b-250k
+/model custom:turquant:qwen3.8-27b-200k-mtp
 ```
 
 See `docs/HERMES.md` for additional details.
