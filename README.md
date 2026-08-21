@@ -2,8 +2,6 @@
 
 A small Docker setup for serving multiple local GGUF runtime profiles through one OpenAI-compatible endpoint.
 
-The intended workflow is simple:
-
 ```text
 OpenCode / Hermes / OpenAI-compatible client
                   |
@@ -21,49 +19,50 @@ OpenCode / Hermes / OpenAI-compatible client
 
 `llama-swap` stays running while LLMs are loaded only on demand. Multiple model IDs may point at the same physical GGUF with different context sizes, KV cache formats, MTP settings, or other `llama-server` flags.
 
-## One configuration file
+## Repository state vs local state
 
-**`llama-swap/config.yaml` is the only source of truth for models and runtime profiles.**
+There are deliberately two different kinds of state, with no generator between them:
 
-There is deliberately no model registry, config generator, or second abstraction layer. To add or tune a model, edit `llama-swap/config.yaml` directly.
+- **`llama-swap/config.example.yaml`** — tracked repository baseline / starter config.
+- **`llama-swap/config.yaml`** — real machine-local runtime config. It is gitignored and is the only config llama-swap actually runs.
+
+On a new machine, copy the example once. After that, edit the local `config.yaml` directly. Setup, Git pulls, agents, and maintenance scripts must never overwrite it.
+
+There is no `models.conf`, config generator, model registry, or synchronization layer.
 
 Configuration boundaries:
 
-- `llama-swap/config.yaml` — model IDs, GGUF paths, context, KV cache, MTP, MoE, fitting/offload and all other per-model `llama-server` arguments.
-- `.env` — machine-local `MODELS_DIR` only.
+- `llama-swap/config.yaml` — local model IDs, GGUF paths under `/models`, context, KV cache, MTP, MoE, fitting/offload and all per-model `llama-server` arguments.
+- `llama-swap/config.example.yaml` — optional tracked baseline for bootstrapping a new machine; not the live config.
+- `.env` — machine-local `MODELS_DIR`.
 - `compose.yaml` — stable container/GPU/mount/port settings.
-- `docker/Dockerfile.cuda` — the TurboQuant/llama.cpp and llama-swap runtime image. Change this only when the engine itself must change.
+- `docker/Dockerfile.cuda` — runtime image; change only when the engine itself changes.
 
 ## Quick start on a new machine
-
-Requirements:
-
-- Docker
-- NVIDIA GPU support in Docker
-- the GGUF files you want to serve
-
-Clone the repository and create the local environment file:
 
 ```bash
 git clone https://github.com/tmielsch/turboquant-setup.git
 cd turboquant-setup
 cp .env.example .env
+cp llama-swap/config.example.yaml llama-swap/config.yaml
 ```
 
-Point `MODELS_DIR` at the directory containing your GGUF files:
+Set the model directory in `.env`:
 
 ```dotenv
 MODELS_DIR=/path/to/models
 ```
 
-Then start the server:
+Then:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-No model is loaded at startup. Check model discovery with:
+The copy step is **bootstrap only**. If `llama-swap/config.yaml` already exists, do not replace it with the example.
+
+No model is loaded at startup. Check discovery with:
 
 ```bash
 curl http://127.0.0.1:9292/v1/models
@@ -77,11 +76,9 @@ Endpoints:
 | `http://127.0.0.1:9292/v1/models` | Model discovery |
 | `http://127.0.0.1:9292/ui` | llama-swap UI |
 
-See [docs/SETUP.md](docs/SETUP.md) for host prerequisites.
-
 ## Add or tune a model
 
-Edit `llama-swap/config.yaml` directly. A profile is just a llama-swap model entry whose command starts `llama-server` with the desired arguments.
+Edit your local `llama-swap/config.yaml` directly. A profile is simply a llama-swap model entry whose `cmd` starts `llama-server` with the desired flags.
 
 Example:
 
@@ -104,55 +101,36 @@ models:
       context: 65536
 ```
 
-The same GGUF can back another profile:
+The same GGUF can have another virtual profile with different flags. That is the abstraction llama-swap already provides; no extra registry is needed.
 
-```yaml
-  "ridge-250k-fast":
-    name: "Qwen3.8 27B Ridge - 250K Fast"
-    cmd: |
-      "${engine}" --host 127.0.0.1 --port ${PORT}
-      --alias ${MODEL_ID}
-      -m "/models/Qwen3.8-27B-Ridge.gguf"
-      -fit on -fitt ${fit_target}
-      -c 250000
-      -ctk turbo2 -ctv turbo2
-      --flash-attn on --jinja -np 1
-    capabilities:
-      in: [text]
-      out: [text]
-      tools: true
-      context: 250000
-```
-
-Because the container starts llama-swap with config watching enabled, edits can be picked up without rebuilding the image. If a reload is needed:
+Because the container starts llama-swap with config watching enabled, valid local edits may be picked up automatically. If a reload is needed:
 
 ```bash
 docker compose restart turboquant
 ```
 
-A model/profile change must **never** require regenerating the whole config or rebuilding the CUDA image.
+A model/profile change never requires rebuilding the CUDA image.
 
-More examples and rules: [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md).
+More examples: [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md).
 
 ## OpenCode
 
-Configure an OpenAI-compatible provider with:
+Use an OpenAI-compatible provider with base URL:
 
 ```text
 http://127.0.0.1:9292/v1
 ```
 
-The model IDs exposed by `llama-swap/config.yaml` are available through `/v1/models`, so OpenCode can address the different runtime profiles independently.
+The local model IDs are exposed through `/v1/models` and can be addressed independently by OpenCode.
 
 ## Repository maintenance
 
-Normal changes fall into three categories:
+Normal changes fall into four categories:
 
-1. **Model/profile change** → edit `llama-swap/config.yaml` only.
-2. **Machine path change** → edit local `.env` only.
-3. **Engine/runtime change** → update `docker/Dockerfile.cuda` and rebuild/publish the image intentionally.
-
-There is no generated model configuration and no parallel native profile registry.
+1. **Local model/profile change** → edit local `llama-swap/config.yaml`; normally do not commit it.
+2. **Change the starter baseline for future machines** → intentionally edit `llama-swap/config.example.yaml`.
+3. **Machine path change** → edit local `.env`.
+4. **Engine/runtime change** → update `docker/Dockerfile.cuda` and rebuild/publish the image intentionally.
 
 Automated coding agents must read [AGENTS.md](AGENTS.md) before making changes.
 
