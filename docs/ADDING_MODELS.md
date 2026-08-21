@@ -1,35 +1,43 @@
 # Adding and Tuning Models
 
-This repository intentionally has one model/runtime configuration file:
+The live model/runtime configuration is the machine-local file:
 
 ```text
 llama-swap/config.yaml
 ```
 
-Edit it directly. There is no generator and no secondary model registry.
+It is gitignored. Edit it directly. The repository tracks only `llama-swap/config.example.yaml` as a starter baseline for new machines.
+
+There is no generator, secondary model registry, or automatic synchronization between example and live config.
 
 ## Mental model
 
 ```text
-host GGUF directory (MODELS_DIR)
+tracked repository baseline
+llama-swap/config.example.yaml
         |
-        | bind-mounted read-only
+        | copied ONCE on first setup
         v
-/models inside the container
-        |
-        | referenced directly by
-        v
+local live config (gitignored)
 llama-swap/config.yaml
         |
+        | references
         v
-/v1/models
+/models inside container
         |
-        | request selects virtual model ID
         v
-TurboQuant llama-server starts on demand
+host GGUF directory (MODELS_DIR)
 ```
 
-The Docker image contains the engine and gateway, not the model weights.
+At runtime:
+
+```text
+/v1/models
+    |
+    | request selects virtual model ID
+    v
+TurboQuant llama-server starts on demand
+```
 
 ## 1. Put or reuse the GGUF in `MODELS_DIR`
 
@@ -41,16 +49,9 @@ MODELS_DIR=/path/to/models
 
 Inside the container this directory is always `/models`.
 
-For example:
+If the GGUF already exists, reuse it. Do not duplicate or redownload large model files just to create another runtime profile.
 
-```text
-host:      /mnt/llm/Qwen3.8-27B-Ridge.gguf
-container: /models/Qwen3.8-27B-Ridge.gguf
-```
-
-If the file already exists, reuse it. Do not duplicate or redownload large model files just to add another runtime profile.
-
-## 2. Add a profile directly to `llama-swap/config.yaml`
+## 2. Add a profile directly to local `llama-swap/config.yaml`
 
 Example:
 
@@ -74,13 +75,13 @@ models:
       context: 65536
 ```
 
-The section key (`ridge-64k-quality`) is the model ID exposed through the OpenAI-compatible API.
+The section key is the model ID exposed through the OpenAI-compatible API.
 
 ## 3. Multiple profiles can use one GGUF
 
-This is the main purpose of llama-swap in this repository. You do not need extra GGUF copies or a custom registry.
+This is a core llama-swap use case. The same physical GGUF can have several virtual IDs with different context/KV/MTP/runtime flags. No extra abstraction is needed.
 
-For example, the same file can have a long-context profile:
+Example:
 
 ```yaml
   "ridge-250k-fast":
@@ -101,26 +102,13 @@ For example, the same file can have a long-context profile:
       context: 250000
 ```
 
-OpenCode/Hermes can then select either virtual model ID even though both use the same weights.
+## Runtime settings belong in the local profile
 
-## Runtime settings belong in the profile
+Put per-model `llama-server` options directly in each profile's `cmd` block, including context, K/V cache, fit/offload, Flash Attention, MTP/speculative decoding, MoE settings, sampling flags, and experimental TurboQuant options.
 
-Put per-model `llama-server` options directly in the profile's `cmd` block, including:
-
-- `-c` — context size
-- `-ctk`, `-ctv` — K/V cache types
-- `-fit`, `-fitt` — fitting/offload behavior
-- `--flash-attn`
-- MTP/speculative decoding flags
-- MoE cache/CPU-MoE flags
-- sampling or anti-loop flags
-- model-specific experimental TurboQuant options
-
-This is intentionally flexible: when llama.cpp/TurboQuant adds a new runtime flag, it can be used immediately without extending a custom config schema or generator.
+When llama.cpp/TurboQuant adds a new runtime flag, use it directly. Do not extend a custom schema or generator.
 
 ## Common KV cache choices
-
-The TurboQuant fork supports standard llama.cpp cache formats as well as TurboQuant formats. K and V can be configured independently.
 
 Typical profiles worth benchmarking include:
 
@@ -128,41 +116,45 @@ Typical profiles worth benchmarking include:
 q8_0 / turbo4   conservative asymmetric
 q8_0 / turbo3   quality-oriented asymmetric
 q8_0 / turbo2   stronger V compression
- turbo2 / turbo2 maximum compression
+turbo2 / turbo2 maximum compression
 ```
 
-Do not assume one global KV choice is optimal for every model or context size. A higher-precision K cache can improve quality but also consume enough VRAM to force weight offload, especially at very long context.
+Do not assume one global KV choice is optimal for every model or context size. Higher K precision can improve quality but may consume enough VRAM to force weight offload at very long contexts.
 
 ## MTP / speculative decoding
 
-MTP packaging differs between GGUFs. Some models contain the relevant MTP tensors in the main GGUF; others use a separate draft GGUF.
+MTP packaging differs between GGUFs. Some contain the relevant MTP tensors in the main GGUF; others use a separate draft GGUF.
 
-Therefore configure the exact `llama-server` flags required by that GGUF directly in the relevant profile. Do not assume every MTP setup needs a separate file and do not add a repository abstraction that forces one packaging style.
+Configure the exact flags required by that GGUF directly in the relevant local profile. Do not force one MTP packaging style through a repository abstraction.
 
-Examples may use flags such as:
+Examples may use:
 
 ```text
 --spec-type draft-mtp
 ```
 
-or, when an actual separate draft GGUF is required:
+or, when a separate draft file is actually required:
 
 ```text
 --spec-type draft-mtp
 --spec-draft-model /models/Some-MTP-Draft.gguf
 ```
 
-Verify support against the engine revision and the model's metadata/readme before enabling it.
+## Repository baseline is optional
+
+A local model change does **not** have to be copied back into `config.example.yaml` or pushed to Git.
+
+Only update `config.example.yaml` when you intentionally want future fresh installations to start with that profile. Differences between local config and the example are normal and should not be treated as drift.
 
 ## Apply and validate
 
-The container runs llama-swap with config watching enabled, so a valid edit may reload automatically. If needed, restart only the existing container:
+llama-swap runs with config watching enabled, so a valid edit may reload automatically. If needed:
 
 ```bash
 docker compose restart turboquant
 ```
 
-Then check model discovery:
+Then check discovery:
 
 ```bash
 curl http://127.0.0.1:9292/v1/models
@@ -176,27 +168,25 @@ If there is a config error:
 docker compose logs --tail=100 turboquant
 ```
 
-Do not run an inference request or benchmark merely to validate that the model ID is registered unless that test was explicitly requested.
-
 ## What not to do
 
-For a normal model/profile change, do **not**:
+For a normal local model/profile change, do **not**:
 
 - rebuild the Docker image
 - edit `docker/Dockerfile.cuda`
 - edit GitHub Actions workflows
+- edit the tracked `config.example.yaml` unless the user explicitly wants the repository baseline changed
 - create another registry or generated copy of `config.yaml`
+- copy `config.example.yaml` over an existing local config
 - rewrite unrelated model entries
 - copy the same GGUF for every context profile
 
 ## Agent checklist
 
-When adding or tuning a model:
-
-1. Read the current `llama-swap/config.yaml` first.
-2. Identify the existing GGUF path under the mounted `/models` tree.
-3. Decide the virtual model ID and runtime flags.
-4. Add or change only the relevant YAML block.
-5. Preserve unrelated entries exactly.
+1. Determine whether the task is a **local config change** or an intentional **repository baseline change**.
+2. For local work, read the current local `llama-swap/config.yaml` first.
+3. Add/change only the relevant YAML block.
+4. Preserve unrelated local entries exactly.
+5. Do not push the local config merely because it changed.
 6. Check `/v1/models` and logs if the gateway is running.
 7. Do not trigger downloads, builds, benchmarks, or large inference unless requested.
