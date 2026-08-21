@@ -42,16 +42,6 @@ Set the host model directory in `.env`:
 MODELS_DIR=/path/to/your/gguf/files
 ```
 
-Examples:
-
-```dotenv
-# Linux
-MODELS_DIR=/mnt/models
-
-# Windows / Docker Desktop
-MODELS_DIR=C:/LLM/models
-```
-
 Then:
 
 ```bash
@@ -107,17 +97,6 @@ docker compose logs --tail=100 turboquant
 - Rebuild the image only when the TurboQuant/llama.cpp runtime itself changes.
 
 There are no platform-specific model registries and no config-generation step.
-
-## NVIDIA Container Toolkit on Linux
-
-Install the toolkit using the instructions appropriate for your distribution, then configure Docker. A typical setup is:
-
-```bash
-sudo nvidia-ctk runtime configure --runtime=docker
-sudo systemctl restart docker
-```
-
-Confirm Docker sees the GPU before debugging this repository.
 
 ## OpenCode
 
