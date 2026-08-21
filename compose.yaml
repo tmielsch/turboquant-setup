@@ -12,13 +12,8 @@ services:
       - "./llama-swap/config.yaml:/config/config.yaml:ro"
 
     environment:
-      TQ_ENGINE: /app/llama-server
-      TQ_MODEL_9B: /models/Qwen3.5-9B-Q4_K_M.gguf
-      TQ_MODEL_27B: /models/Qwen3.8-27B-UD-Q3_K_XL.gguf
-      TQ_MTP_DRAFT_27B: /models/mtp-Qwen3.8-27B-Q4_0.gguf
-      # Let turbo2 be used for the K cache too (otherwise the engine
-      # auto-upgrades K to q8_0 for GQA models, which blows up the KV cache
-      # and forces most layers off the GPU - 4 tok/s instead of 20+).
+      # Allow explicitly configured turbo2 K caches to stay turbo2 on GQA models.
+      # Per-model K/V choices live in the machine-local llama-swap/config.yaml.
       TURBO_AUTO_ASYMMETRIC: "0"
 
     deploy:

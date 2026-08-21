@@ -1,7 +1,8 @@
-# AUTO-GENERATED from models.conf by scripts/generate-config.sh.
-# Do not edit by hand - your changes will be overwritten.
-# Regenerate with:  bash scripts/generate-config.sh
-# Apply with:       docker compose restart turboquant
+# Repository baseline for llama-swap.
+# Copy this file to config.yaml once on a new machine, then edit config.yaml locally.
+# config.yaml is intentionally gitignored and must never be overwritten by setup or maintenance scripts.
+# This example is not automatically synchronized with any machine's live configuration.
+# Multiple virtual model IDs may point to the same GGUF with different runtime flags.
 
 startPort: 5800
 sendLoadingState: false

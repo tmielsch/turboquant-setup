@@ -1,115 +1,123 @@
 # Agent Instructions
 
-These instructions apply to automated coding agents working in this repository.
+These rules apply to every automated coding agent working in this repository.
 
-## Architecture
+## Architecture in one sentence
 
-- The Docker image contains the CUDA runtime, TurboQuant `llama-server`, and `llama-swap`.
-- GGUF model files are runtime data. They live outside the image and are mounted read-only at `/models` through `MODELS_DIR`.
-- `llama-swap/config.yaml` is the source of truth for virtual model IDs and llama-server runtime profiles.
-- `compose.yaml` defines stable container-level concerns such as the image, mounts, ports, and environment.
-- Adding, removing, or tuning a model normally must **not** rebuild the Docker image.
+The live model/runtime configuration is the machine-local, gitignored `llama-swap/config.yaml`. The repository only tracks `llama-swap/config.example.yaml` as a bootstrap baseline.
+
+Do not create another model registry, generated config, profile database, INI layer, merge layer, synchronization script, or automatic import/export workflow on top of llama-swap.
+
+## Local state vs repository state
+
+### `llama-swap/config.yaml` — live local state
+
+This is the configuration llama-swap actually runs. It may contain machine-specific model selections and locally evolved profiles that are intentionally not committed.
+
+Use it for virtual model IDs, GGUF paths under `/models`, context, KV cache, TurboQuant options, fit/offload, Flash Attention, MTP/speculative decoding, MoE settings, sampling flags, and any other per-model `llama-server` arguments.
+
+Several virtual model IDs may intentionally reference the same physical GGUF with different arguments.
+
+**Never assume local config changes should be committed back to the repository.** Only change repository state when the user explicitly asks for repository changes.
+
+When working on a machine-local config, read the existing local file first and modify only the requested block(s). Preserve unrelated profiles exactly.
+
+### `llama-swap/config.example.yaml` — tracked baseline
+
+This is only the default starter state for a new machine. It is not automatically synchronized with `config.yaml`.
+
+Do not overwrite an existing local `config.yaml` from this file. Do not treat differences between the two files as drift that must be reconciled.
+
+Change the example only when the user explicitly wants the repository's future bootstrap baseline changed.
+
+### `.env`
+
+Machine-local settings such as `MODELS_DIR`. Do not commit host-specific absolute paths.
+
+### `compose.yaml`
+
+Stable container-level concerns only: image, ports, mounts, GPU access, container-wide environment variables.
+
+### `docker/Dockerfile.cuda`
+
+Change only when the runtime image itself must change, for example a different TurboQuant/llama.cpp revision, CUDA/runtime dependency, build flags, GPU architecture, or llama-swap version.
+
+Adding or tuning a model does not require an image rebuild.
+
+## Critical preservation rules
+
+1. Never regenerate, replace, reconstruct, normalize, or overwrite the whole local `llama-swap/config.yaml` from another file.
+2. Never copy `config.example.yaml` over an existing `config.yaml`.
+3. Never infer that local runtime changes belong in Git.
+4. Never add a second schema merely to make repeated YAML shorter.
+5. Do not reintroduce `models.conf`, `generate-config.sh`, or a parallel profile registry.
+
+If the user asks to modify local runtime configuration but the local file is not available to the agent, ask for/read that file rather than editing the repository baseline as a substitute.
+
+## New machines
+
+Bootstrap and maintenance are separate concerns.
+
+Initial bootstrap:
+
+```text
+git clone
+  -> copy .env.example to .env if .env does not exist
+  -> copy llama-swap/config.example.yaml to llama-swap/config.yaml if config.yaml does not exist
+  -> set MODELS_DIR
+  -> docker compose pull
+  -> docker compose up -d
+```
+
+The copy operations are one-time initialization only and must refuse to overwrite existing local files.
+
+After bootstrap, normal model maintenance touches only the local `config.yaml`.
+
+## Existing installations
+
+Before moving an old checkout to this architecture, preserve its current live `llama-swap/config.yaml`. Do not run the old generator as part of migration unless the user explicitly asks for a one-time conversion and understands that it rewrites the YAML.
+
+Once the refactor is applied, the local config is gitignored and must remain untouched by future repository pulls.
+
+## Adding a model
+
+Read `docs/ADDING_MODELS.md`.
+
+Normal flow:
+
+```text
+existing GGUF in MODELS_DIR
+  -> add one or more entries directly to local llama-swap/config.yaml
+  -> llama-swap config reload (or cheap restart if necessary)
+  -> verify /v1/models
+```
+
+Do not copy or redownload a large GGUF if the user already has it.
 
 ## Expensive side effects
 
-Treat user time, compute, bandwidth, and money as scarce resources. Before any action that may trigger a build, CI job, test suite, deploy, download, install, cloud/API/GPU workload, or other slow/costly side effect, identify the consequence and get explicit user approval unless that exact action was already requested.
+Unless explicitly requested, do not rebuild the CUDA image, trigger CI, download GGUFs, install packages, run large-model inference, run benchmarks, or restart workloads unnecessarily.
 
-Batch changes and do cheap/static validation first. Never trigger redundant or parallel expensive runs. Once a long-running job starts, freeze anything that would invalidate or restart it unless a critical issue is found and the user explicitly chooses to restart. Never trade the user's waiting time for minor cleanup or optimization without asking. If duration/cost is unknown or a side effect is uncertain, assume it may be expensive and ask first.
+Prefer static/config validation first.
 
-In particular:
+## Cheap validation
 
-- Do **not** modify `docker/Dockerfile.cuda` or `.github/workflows/docker-cuda.yml` merely to add or tune a model.
-- Do **not** trigger or re-run the CUDA image workflow unless the user explicitly asks for it or an engine/image change genuinely requires it and the user approves.
-- Do **not** download a model if the user has already supplied a usable local file.
-- Do **not** start benchmarks or large model inference as validation unless the user explicitly asks for it.
+For a normal local config edit:
 
-## Adding models
-
-Read [`docs/ADDING_MODELS.md`](docs/ADDING_MODELS.md) before adding a model.
-
-For a normal GGUF model addition:
-
-1. Determine the host directory configured as `MODELS_DIR`.
-2. Reuse the user's existing GGUF if it is already present there. If the supplied file is elsewhere, do not silently copy, move, or redownload it; either use/update the local `MODELS_DIR` arrangement or ask the user which location should be canonical.
-3. Add a virtual model entry to `llama-swap/config.yaml`.
-4. Inside llama-swap commands, reference model files by their **container path**, e.g. `/models/MyModel.gguf`, never by a host-specific Windows or Linux path.
-5. Put runtime choices such as context length, KV cache type, GPU fitting/offload behavior, MTP/speculative decoding, aliases, and other `llama-server` flags in `llama-swap/config.yaml`.
-6. Prefer a direct `/models/<filename>.gguf` path for one-off models. Add a Compose environment variable/macro only when the same physical model is intentionally shared by several profiles and the indirection improves maintainability.
-7. Do not edit the Dockerfile, CI workflow, or bake the GGUF into the image.
-8. Validate that the new model ID appears in `/v1/models`. This discovery request must not load the model.
-
-## Model installation means configuration, not image building
-
-When a user says something like:
-
-> Install this model; the GGUF is already here.
-
-Interpret the normal workflow as:
-
-```text
-existing GGUF
-    -> host MODELS_DIR
-    -> mounted as /models/<file>.gguf
-    -> llama-swap/config.yaml profile
-    -> visible through /v1/models
-```
-
-It does **not** imply:
-
-```text
-Dockerfile change -> CUDA rebuild -> new image
-```
-
-## Runtime configuration boundaries
-
-Use `llama-swap/config.yaml` for:
-
-- model IDs and aliases
-- GGUF paths under `/models`
-- context size (`-c`)
-- KV cache types (`-ctk`, `-ctv`)
-- `--fit` / fitting target
-- flash attention and parallelism flags
-- MTP/speculative decoding configuration
-- any other per-model `llama-server` arguments
-
-Use `.env` / `MODELS_DIR` for host-specific model directory selection. Do not commit machine-specific absolute paths.
-
-Use `compose.yaml` only when a container-level setting truly changes. Recreating/restarting a container is not the same as rebuilding the image, but still avoid unnecessary changes.
-
-Use `docker/Dockerfile.cuda` only when the runtime image itself must change, for example:
-
-- a different TurboQuant/llama.cpp engine revision
-- CUDA/runtime library changes
-- compiler/build flags or GPU architecture changes
-- a different bundled `llama-swap` binary
-
-Such changes can trigger an expensive CUDA build and require explicit awareness/approval.
-
-## Validation
-
-Prefer the cheapest validation that proves the change:
-
-1. Inspect the edited YAML for schema/indentation consistency with existing entries.
-2. If the gateway is already running, check its logs for config reload errors.
-3. Query `http://127.0.0.1:9292/v1/models` and confirm the new model ID is listed.
-4. Do not send an inference request merely to prove discovery works.
-5. Only load/benchmark the model when the user asks to test inference or performance.
-
-Useful commands from the repository directory:
+1. Inspect YAML structure and indentation.
+2. If the gateway is running, inspect logs for reload errors.
+3. Check discovery:
 
 ```bash
-docker compose ps
-docker compose logs --tail=100 turboquant
 curl http://127.0.0.1:9292/v1/models
 ```
 
-On PowerShell, model discovery can be checked with:
+This should not load a model into VRAM.
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:9292/v1/models
-```
+## Preserve zero VRAM at idle
 
-## Preserve the zero-VRAM-at-idle design
+The persistent service is llama-swap, not an always-loaded LLM. A child `llama-server` should start only when a configured model ID is requested.
 
-The gateway should start without loading an LLM. Model discovery and configuration changes must not eagerly load model weights. A `llama-server` child should be launched only when an inference request selects a configured model ID.
+## If documentation and implementation disagree
+
+Do not proceed destructively. Preserve local runtime state first, identify which file is live, and fix documentation or repository baseline without discarding machine-local configuration.
