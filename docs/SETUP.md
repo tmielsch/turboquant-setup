@@ -1,106 +1,104 @@
 # Setup
 
-## Architektur
+This repository is designed to be moved to a new machine without regenerating model configuration.
 
-Das Setup besteht aus zwei Schichten:
+## Architecture
 
-1. **`llama-swap`** als Gateway: läuft dauerhaft und nimmt API-Anfragen entgegen.
-2. **`llama-server`** (TurboQuant-Fork) als Engine: wird von llama-swap bei Bedarf pro Modell-Profil gestartet.
+There are only two runtime layers:
 
-Windows und CachyOS/Linux verwenden dieselbe `scripts/common/profiles.conf` und dieselbe `llama-swap/config.yaml`. `llama-swap` läuft dauerhaft auf `127.0.0.1:9292`; ein Modell wird erst geladen, wenn Hermes/OpenCode eine der virtuellen Model-IDs anfordert.
+1. **llama-swap** — persistent OpenAI-compatible gateway on port `9292`.
+2. **TurboQuant llama-server** — child process started on demand for the selected virtual model ID.
 
-Unter Docker wird `llama-swap/config.yaml` automatisch aus `models.conf` generiert (`bash scripts/generate-config.sh`); Modelle werden über `models.conf` bzw. `scripts/add-model.sh` verwaltet - Details in `docs/ADDING_MODELS.md`. Die nativen Skripte hier setzen die Pfade über `profiles.conf` und Umgebungsvariablen.
+`llama-swap/config.yaml` is tracked in Git and is the canonical model/runtime configuration. Machine setup must not rewrite it.
 
-### Verfügbare Model-IDs
+## Requirements
 
-- `qwen3.5-9b-32k`
-- `qwen3.8-27b-64k` (schnellstes 27B-Profil, ~23 tok/s)
-- `qwen3.8-27b-128k`
-- `qwen3.8-27b-200k`
-- `qwen3.8-27b-250k`
+- Docker
+- NVIDIA GPU with working container passthrough
+- GGUF files stored somewhere on the host
 
-Die 27B-Varianten nutzen dieselbe GGUF-Datei mit unterschiedlichen Runtime-Parametern.
+Linux additionally needs the NVIDIA Container Toolkit configured for Docker. Windows uses Docker Desktop/WSL2 GPU passthrough.
 
-## Windows
-
-```powershell
-.\scripts\windows\setup.ps1
-winget install llama-swap
-.\scripts\windows\start-gateway.ps1
-```
-
-Optionaler Autostart:
-
-```powershell
-.\scripts\windows\install-autostart.ps1
-```
-
-## CachyOS / Arch Linux
-
-Build-Abhängigkeiten, falls nötig:
+## Bootstrap a new machine
 
 ```bash
-sudo pacman -S --needed base-devel git cmake cuda
+git clone https://github.com/tmielsch/turboquant-setup.git
+cd turboquant-setup
+cp .env.example .env
 ```
 
-Engine bauen:
+Set the host model directory in `.env`:
+
+```dotenv
+MODELS_DIR=/path/to/your/gguf/files
+```
+
+Examples:
+
+```dotenv
+# Linux
+MODELS_DIR=/mnt/models
+
+# Windows / Docker Desktop
+MODELS_DIR=C:/LLM/models
+```
+
+Then:
 
 ```bash
-bash scripts/linux/setup.sh
+docker compose pull
+docker compose up -d
 ```
 
-`llama-swap` ist offiziell als Linux-Release-Binary verfügbar oder kann mit Homebrew installiert werden:
+The container has `restart: unless-stopped`, so it returns after reboot. No LLM is loaded until a configured model ID is requested.
+
+## Verify
 
 ```bash
-brew tap mostlygeek/llama-swap
-brew install llama-swap
+docker compose ps
+curl http://127.0.0.1:9292/v1/models
 ```
 
-Gateway starten:
-
-```bash
-bash scripts/linux/start-gateway.sh
-```
-
-Autostart als systemd-User-Service:
-
-```bash
-bash scripts/linux/install-autostart.sh
-```
-
-Status und Logs:
-
-```bash
-systemctl --user status turboquant-gateway.service
-journalctl --user -u turboquant-gateway.service -f
-```
-
-Optionaler Start bereits vor dem Login:
-
-```bash
-sudo loginctl enable-linger "$USER"
-```
-
-## API
-
-Auf beiden Betriebssystemen:
+Useful endpoints:
 
 - API: `http://127.0.0.1:9292/v1`
-- Model Discovery: `http://127.0.0.1:9292/v1/models`
-- Web UI: `http://127.0.0.1:9292/ui`
+- model discovery: `http://127.0.0.1:9292/v1/models`
+- llama-swap UI: `http://127.0.0.1:9292/ui`
 
-## Direkter Debug-Start
-
-Windows:
-
-```powershell
-.\scripts\windows\start-server.ps1 27b-200k
-```
-
-Linux:
+If something fails:
 
 ```bash
-bash scripts/linux/start-server.sh 27b-200k
+docker compose logs --tail=100 turboquant
 ```
 
-Der direkte Start ist nur für Benchmarks/Troubleshooting gedacht. Im Alltag sollte ausschließlich `llama-swap` laufen.
+## Maintenance
+
+Machine bootstrap and model maintenance are intentionally separate.
+
+- Change machine-local model paths in `.env`.
+- Add/tune model profiles directly in `llama-swap/config.yaml`.
+- Update Compose only for container-level settings.
+- Rebuild the image only when the TurboQuant/llama.cpp runtime itself changes.
+
+There are no platform-specific profile files and no config-generation step.
+
+## NVIDIA Container Toolkit on Linux
+
+Install the toolkit using the instructions appropriate for your distribution, then configure Docker. A typical setup is:
+
+```bash
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+Confirm Docker sees the GPU before debugging this repository.
+
+## OpenCode
+
+Use the server as an OpenAI-compatible provider with base URL:
+
+```text
+http://127.0.0.1:9292/v1
+```
+
+The virtual model IDs come directly from `llama-swap/config.yaml` and are discoverable through `/v1/models`.
