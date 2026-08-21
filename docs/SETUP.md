@@ -61,9 +61,21 @@ docker compose up -d
 
 The container has `restart: unless-stopped`, so it returns after reboot. No LLM is loaded until a configured model ID is requested.
 
+## Migrating an older checkout
+
+If an existing installation already has a working `llama-swap/config.yaml`, preserve that file before switching branches or pulling the refactor:
+
+```bash
+cp llama-swap/config.yaml llama-swap/config.yaml.backup
+```
+
+After the update, keep/restore that YAML as `llama-swap/config.yaml`. Do **not** regenerate it from the old `models.conf` during migration.
+
+Once the new `.gitignore` is present, the live YAML is machine-local and future Git updates do not touch it.
+
 ## Existing machine / repository updates
 
-A normal `git pull` updates Docker/runtime files and the tracked `config.example.yaml`, but **does not touch your gitignored `llama-swap/config.yaml`**.
+A normal `git pull` updates Docker/runtime files and the tracked `config.example.yaml`, but does **not** touch your gitignored `llama-swap/config.yaml`.
 
 Do not copy the example over your existing config after an update. If the repository baseline gains an interesting profile, manually copy only the relevant block into your local config if you want it.
 
