@@ -1,55 +1,48 @@
-# TurboQuant Setup
+# TurboQuant Model Server
 
-Run long-context Qwen models with a TurboQuant KV cache on a **16 GB NVIDIA
-GPU** (tested with an RTX 4070 Ti SUPER), served through a single
-OpenAI-compatible API endpoint.
+A small Docker setup for serving multiple local GGUF runtime profiles through one OpenAI-compatible endpoint.
 
-- Qwen3.8-27B with **200K context** (250K as maximum profile)
-- TurboQuant KV cache (`turbo2` K + `turbo2` V) - up to ~10x less KV memory
-- Measured 23 tok/s at 64K context on a 16 GB GPU (see model table below)
-- `llama-swap` as a persistent gateway: **no model loaded at startup**, models
-  are loaded on demand and hot-swapped when you switch model IDs
-- Same model IDs and API endpoint on Windows and Linux
-- **Adding models does not require a Docker image rebuild** - edit
-  `models.conf` (or run `scripts/add-model.sh`) and restart the container
+The intended workflow is simple:
 
-Works with Hermes, OpenCode, or any OpenAI-compatible client.
-
-## Architecture
-
-```
-Hermes / OpenCode / any OpenAI-compatible client
-                 |
-                 |  http://127.0.0.1:9292/v1
-                 v
-            llama-swap (gateway)
-                 |
-                 |  requested model ID
-                 v
-      TurboQuant llama-server (started on demand)
-                 |
-                 +-- host-mounted GGUF files
-                 +-- context / KV / MTP runtime profile
+```text
+OpenCode / Hermes / OpenAI-compatible client
+                  |
+                  | http://127.0.0.1:9292/v1
+                  v
+             llama-swap
+                  |
+                  | selected virtual model ID
+                  v
+        TurboQuant llama-server
+                  |
+                  v
+        host-mounted GGUF files
 ```
 
-The gateway exposes virtual model IDs through `/v1/models`. Requesting a model
-ID starts the matching `llama-server` process with the configured profile;
-requesting a different ID swaps them.
+`llama-swap` stays running while LLMs are loaded only on demand. Multiple model IDs may point at the same physical GGUF with different context sizes, KV cache formats, MTP settings, or other `llama-server` flags.
 
-## Requirements
+## One configuration file
 
-- NVIDIA GPU with at least 16 GB VRAM (other sizes work, adjust models
-  accordingly - see [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md))
-- NVIDIA driver (CUDA-capable)
-- Docker with working NVIDIA GPU passthrough:
-  - **Linux:** Docker + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
-    (then `sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker`)
-  - **Windows:** Docker Desktop with WSL2 backend + NVIDIA GPU passthrough
-- ~21 GB disk space for the reference models (plus the image)
+**`llama-swap/config.yaml` is the only source of truth for models and runtime profiles.**
 
-No local CUDA/CMake toolchain is needed - the engine image is prebuilt.
+There is deliberately no model registry, config generator, or second abstraction layer. To add or tune a model, edit `llama-swap/config.yaml` directly.
 
-## Quick start
+Configuration boundaries:
+
+- `llama-swap/config.yaml` — model IDs, GGUF paths, context, KV cache, MTP, MoE, fitting/offload and all other per-model `llama-server` arguments.
+- `.env` — machine-local `MODELS_DIR` only.
+- `compose.yaml` — stable container/GPU/mount/port settings.
+- `docker/Dockerfile.cuda` — the TurboQuant/llama.cpp and llama-swap runtime image. Change this only when the engine itself must change.
+
+## Quick start on a new machine
+
+Requirements:
+
+- Docker
+- NVIDIA GPU support in Docker
+- the GGUF files you want to serve
+
+Clone the repository and create the local environment file:
 
 ```bash
 git clone https://github.com/tmielsch/turboquant-setup.git
@@ -57,198 +50,115 @@ cd turboquant-setup
 cp .env.example .env
 ```
 
-If your GGUF files are not in `./models`, point `MODELS_DIR` at them:
+Point `MODELS_DIR` at the directory containing your GGUF files:
 
-```bash
-# .env
-MODELS_DIR=/path/to/your/models
+```dotenv
+MODELS_DIR=/path/to/models
 ```
 
-Download the reference models (optional but recommended, ~21 GB total):
-
-```bash
-mkdir -p models
-curl -L -o models/Qwen3.5-9B-Q4_K_M.gguf \
-  https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf
-curl -L -o models/Qwen3.8-27B-UD-Q3_K_XL.gguf \
-  https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-Q3_K_XL.gguf
-curl -L -o models/mtp-Qwen3.8-27B-Q4_0.gguf \
-  https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/MTP/mtp-Qwen3.8-27B-Q4_0.gguf
-```
-
-Then:
+Then start the server:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-Check the gateway:
+No model is loaded at startup. Check model discovery with:
 
 ```bash
 curl http://127.0.0.1:9292/v1/models
 ```
 
-The container starts only `llama-swap` (with `restart: unless-stopped`, so it
-comes back up after reboots). No LLM is loaded until a client requests one of
-the configured model IDs.
-
-### Endpoints
+Endpoints:
 
 | Endpoint | Purpose |
 |---|---|
 | `http://127.0.0.1:9292/v1` | OpenAI-compatible API |
 | `http://127.0.0.1:9292/v1/models` | Model discovery |
-| `http://127.0.0.1:9292/ui` | llama-swap web UI |
+| `http://127.0.0.1:9292/ui` | llama-swap UI |
 
-## Adding models (no image rebuild!)
+See [docs/SETUP.md](docs/SETUP.md) for host prerequisites.
 
-Each model is a section in [`models.conf`](models.conf). The Docker image
-contains only the engine binaries; models and runtime profiles are mounted in
-as files, so changing them is a config edit + container restart (seconds).
+## Add or tune a model
 
-**Easiest way - interactive wizard:**
+Edit `llama-swap/config.yaml` directly. A profile is just a llama-swap model entry whose command starts `llama-server` with the desired arguments.
 
-```bash
-bash scripts/add-model.sh
+Example:
+
+```yaml
+models:
+  "ridge-64k-quality":
+    name: "Qwen3.8 27B Ridge - 64K Quality"
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "/models/Qwen3.8-27B-Ridge.gguf"
+      -fit on -fitt ${fit_target}
+      -c 65536
+      -ctk q8_0 -ctv turbo3
+      --flash-attn on --jinja -np 1
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 65536
 ```
 
-It asks for the GGUF file (local path or download URL), model ID, context
-size, KV cache options and an optional MTP draft, then updates the config and
-offers to restart the container. Note: MTP profiles only make sense on GPUs
-with 24+ GB VRAM (see the model table below).
+The same GGUF can back another profile:
 
-**Or by hand:** append a section to `models.conf`, then regenerate:
+```yaml
+  "ridge-250k-fast":
+    name: "Qwen3.8 27B Ridge - 250K Fast"
+    cmd: |
+      "${engine}" --host 127.0.0.1 --port ${PORT}
+      --alias ${MODEL_ID}
+      -m "/models/Qwen3.8-27B-Ridge.gguf"
+      -fit on -fitt ${fit_target}
+      -c 250000
+      -ctk turbo2 -ctv turbo2
+      --flash-attn on --jinja -np 1
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 250000
+```
+
+Because the container starts llama-swap with config watching enabled, edits can be picked up without rebuilding the image. If a reload is needed:
 
 ```bash
-# models.conf
-[model:my-model-64k]
-name=My Model 64K
-file=MyModel-Q4_K_M.gguf
-context=65536
-
-bash scripts/generate-config.sh
 docker compose restart turboquant
 ```
 
-Full reference (options, KV cache choices, VRAM fit guide):
-[docs/ADDING_MODELS.md](docs/ADDING_MODELS.md).
+A model/profile change must **never** require regenerating the whole config or rebuilding the CUDA image.
 
-Automated coding agents should read [`AGENTS.md`](AGENTS.md) before modifying this repository. It defines the architecture boundaries and the rules for avoiding unnecessary builds, downloads, CI runs, and other expensive side effects.
+More examples and rules: [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md).
 
-## Default model IDs
+## OpenCode
 
-| Model ID | Context | KV cache | Decode (16 GB GPU) |
-|---|---|---|---|
-| `qwen3.5-9b-32k` | 32K | `q8_0` K / `turbo3` V | ~40+ tok/s |
-| `qwen3.8-27b-64k` | 64K | `turbo2` K / `turbo2` V | ~23 tok/s |
-| `qwen3.8-27b-128k` | 128K | `turbo2` K / `turbo2` V | ~15 tok/s |
-| `qwen3.8-27b-200k` | 200K | `turbo2` K / `turbo2` V | ~11 tok/s |
-| `qwen3.8-27b-250k` | 250K | `turbo2` K / `turbo2` V | ~10 tok/s |
+Configure an OpenAI-compatible provider with:
 
-All 27B variants use the same main GGUF file - they are runtime profiles, not
-separate model copies. Decode speed drops as the reserved KV cache grows, so
-use the smallest context that covers your workload. MTP profiles are not
-viable on a 16 GB card (the draft expands to ~12.9 GB in VRAM).
-
-## Usage
-
-```bash
-curl http://127.0.0.1:9292/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"qwen3.8-27b-64k","messages":[{"role":"user","content":"Hello!"}]}'
+```text
+http://127.0.0.1:9292/v1
 ```
 
-The first request loads the model into VRAM (10-30 s on NVMe), subsequent
-requests run at full speed.
+The model IDs exposed by `llama-swap/config.yaml` are available through `/v1/models`, so OpenCode can address the different runtime profiles independently.
 
-### Hermes
+## Repository maintenance
 
-Use the gateway as a custom OpenAI-compatible provider:
+Normal changes fall into three categories:
 
-```yaml
-custom_providers:
-  - name: turboquant
-    base_url: http://127.0.0.1:9292/v1
-    models:
-      qwen3.5-9b-32k:
-        context_length: 32768
-      qwen3.8-27b-64k:
-        context_length: 65536
-      qwen3.8-27b-128k:
-        context_length: 131072
-      qwen3.8-27b-200k:
-        context_length: 200000
-      qwen3.8-27b-250k:
-        context_length: 250000
-```
+1. **Model/profile change** → edit `llama-swap/config.yaml` only.
+2. **Machine path change** → edit local `.env` only.
+3. **Engine/runtime change** → update `docker/Dockerfile.cuda` and rebuild/publish the image intentionally.
 
-Model switches: `/model custom:turboquant:qwen3.8-27b-64k`
+There is no generated model configuration and no parallel native profile registry.
 
-### OpenCode
-
-Add the endpoint as an OpenAI-compatible provider with base URL
-`http://127.0.0.1:9292/v1`; model discovery runs through `/v1/models`.
-
-## Troubleshooting
-
-### `docker compose pull` says "no configuration file provided"
-
-Run compose from the repository directory (where `compose.yaml` lives).
-
-### Container fails to start: `could not select device driver "nvidia"`
-
-The NVIDIA container runtime is missing or not registered with Docker.
-Linux:
-
-```bash
-sudo pacman -S nvidia-container-toolkit      # Arch / CachyOS
-# or: sudo apt install nvidia-container-toolkit   (Debian/Ubuntu)
-sudo nvidia-ctk runtime configure --runtime=docker
-sudo systemctl restart docker
-```
-
-### `permission denied while trying to connect to the docker API`
-
-Your user is not in the `docker` group (or the group was added after login):
-
-```bash
-sudo usermod -aG docker "$USER"
-# then log out and back in (or run: newgrp docker)
-```
-
-### Engine starts but generation is very slow
-
-The model + KV cache does not fit in VRAM and parts are offloaded to system
-RAM. Either use a smaller quantization of the model, reduce the context size,
-or use a more aggressive V-cache quantization (see
-[docs/ADDING_MODELS.md](docs/ADDING_MODELS.md)).
-
-### Check container state and logs
-
-```bash
-docker compose ps
-docker compose logs -f
-```
-
-## Native installation (without Docker)
-
-The prebuilt Docker image is the recommended path. Native build scripts for
-Windows/Linux remain in `scripts/` for development and debugging - see
-[docs/SETUP.md](docs/SETUP.md). Note that the native path compiles the
-TurboQuant engine from source (CUDA/CMake, takes a long time).
-
-## Building the container image
-
-`docker/Dockerfile.cuda` builds the TurboQuant `llama-server` runtime plus
-`llama-swap` in one image. GitHub Actions publishes
-`ghcr.io/tmielsch/turboquant-setup:cuda` on `main` or via manual workflow
-dispatch. Model/profile changes never require rebuilding the image.
+Automated coding agents must read [AGENTS.md](AGENTS.md) before making changes.
 
 ## Engine
 
-Inference engine: [TheTom/llama-cpp-turboquant](https://github.com/TheTom/llama-cpp-turboquant),
-branch `feature/turboquant-kv-cache`.
+Inference engine: [TheTom/llama-cpp-turboquant](https://github.com/TheTom/llama-cpp-turboquant), currently built from `feature/turboquant-kv-cache`.
 
 ## License
 
