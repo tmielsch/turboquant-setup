@@ -13,7 +13,7 @@ services:
 
     environment:
       # Allow explicitly configured turbo2 K caches to stay turbo2 on GQA models.
-      # Per-model K/V choices belong in llama-swap/config.yaml.
+      # Per-model K/V choices live in the machine-local llama-swap/config.yaml.
       TURBO_AUTO_ASYMMETRIC: "0"
 
     deploy:
