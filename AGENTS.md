@@ -14,19 +14,7 @@ Do not create another model registry, generated config, profile database, INI la
 
 This is the configuration llama-swap actually runs. It may contain machine-specific model selections and locally evolved profiles that are intentionally not committed.
 
-Use it for:
-
-- virtual model IDs and display names
-- GGUF paths under `/models`
-- context size (`-c`)
-- KV cache types (`-ctk`, `-ctv`)
-- TurboQuant options
-- `--fit` / offload behavior
-- Flash Attention and parallelism
-- MTP/speculative decoding
-- MoE cache / CPU MoE settings
-- sampling/runtime flags
-- any other per-model `llama-server` arguments
+Use it for virtual model IDs, GGUF paths under `/models`, context, KV cache, TurboQuant options, fit/offload, Flash Attention, MTP/speculative decoding, MoE settings, sampling flags, and any other per-model `llama-server` arguments.
 
 Several virtual model IDs may intentionally reference the same physical GGUF with different arguments.
 
@@ -84,6 +72,12 @@ git clone
 The copy operations are one-time initialization only and must refuse to overwrite existing local files.
 
 After bootstrap, normal model maintenance touches only the local `config.yaml`.
+
+## Existing installations
+
+Before moving an old checkout to this architecture, preserve its current live `llama-swap/config.yaml`. Do not run the old generator as part of migration unless the user explicitly asks for a one-time conversion and understands that it rewrites the YAML.
+
+Once the refactor is applied, the local config is gitignored and must remain untouched by future repository pulls.
 
 ## Adding a model
 
