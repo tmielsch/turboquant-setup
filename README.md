@@ -76,6 +76,22 @@ Endpoints:
 | `http://127.0.0.1:9292/v1/models` | Model discovery |
 | `http://127.0.0.1:9292/ui` | llama-swap UI |
 
+## Existing installations: migrate without losing local config
+
+Before switching an older checkout to this architecture, preserve the **current live YAML**, not the old registry:
+
+```bash
+cp llama-swap/config.yaml llama-swap/config.yaml.backup
+```
+
+After updating the repository, restore that file as the local runtime config if needed:
+
+```bash
+cp llama-swap/config.yaml.backup llama-swap/config.yaml
+```
+
+Do not run an old config generator during migration. Once migrated, `config.yaml` is local and ignored by Git.
+
 ## Add or tune a model
 
 Edit your local `llama-swap/config.yaml` directly. A profile is simply a llama-swap model entry whose `cmd` starts `llama-server` with the desired flags.
