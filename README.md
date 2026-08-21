@@ -92,6 +92,8 @@ cp llama-swap/config.yaml.backup llama-swap/config.yaml
 
 Do not run an old config generator during migration. Once migrated, `config.yaml` is local and ignored by Git.
 
+If the only current source you have is an old `models.conf`, convert it once outside the normal maintenance workflow, inspect the resulting YAML, and from then on retire the registry. Do not keep both formats alive.
+
 ## Add or tune a model
 
 Edit your local `llama-swap/config.yaml` directly. A profile is simply a llama-swap model entry whose `cmd` starts `llama-server` with the desired flags.
