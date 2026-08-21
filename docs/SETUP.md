@@ -1,6 +1,6 @@
 # Setup
 
-This repository is designed to be moved to a new machine without regenerating model configuration.
+This repository provides a reusable Docker/runtime baseline. The live model configuration is intentionally machine-local.
 
 ## Architecture
 
@@ -9,7 +9,13 @@ There are only two runtime layers:
 1. **llama-swap** — persistent OpenAI-compatible gateway on port `9292`.
 2. **TurboQuant llama-server** — child process started on demand for the selected virtual model ID.
 
-`llama-swap/config.yaml` is tracked in Git and is the canonical model/runtime configuration. Machine setup must not rewrite it.
+Configuration state is split deliberately:
+
+- `llama-swap/config.example.yaml` — tracked repository baseline for new machines.
+- `llama-swap/config.yaml` — local live configuration, gitignored, never automatically overwritten.
+- `.env` — local host path settings such as `MODELS_DIR`.
+
+There is no config generator or synchronization step between the example and the live config.
 
 ## Requirements
 
@@ -25,7 +31,10 @@ Linux additionally needs the NVIDIA Container Toolkit configured for Docker. Win
 git clone https://github.com/tmielsch/turboquant-setup.git
 cd turboquant-setup
 cp .env.example .env
+cp llama-swap/config.example.yaml llama-swap/config.yaml
 ```
+
+Only perform the copies when those local files do not already exist. They are initialization steps, not update commands.
 
 Set the host model directory in `.env`:
 
@@ -52,6 +61,12 @@ docker compose up -d
 
 The container has `restart: unless-stopped`, so it returns after reboot. No LLM is loaded until a configured model ID is requested.
 
+## Existing machine / repository updates
+
+A normal `git pull` updates Docker/runtime files and the tracked `config.example.yaml`, but **does not touch your gitignored `llama-swap/config.yaml`**.
+
+Do not copy the example over your existing config after an update. If the repository baseline gains an interesting profile, manually copy only the relevant block into your local config if you want it.
+
 ## Verify
 
 ```bash
@@ -73,14 +88,13 @@ docker compose logs --tail=100 turboquant
 
 ## Maintenance
 
-Machine bootstrap and model maintenance are intentionally separate.
-
+- Add/tune local model profiles directly in `llama-swap/config.yaml`.
 - Change machine-local model paths in `.env`.
-- Add/tune model profiles directly in `llama-swap/config.yaml`.
+- Edit `config.example.yaml` only when intentionally changing the repository's bootstrap baseline for future machines.
 - Update Compose only for container-level settings.
 - Rebuild the image only when the TurboQuant/llama.cpp runtime itself changes.
 
-There are no platform-specific profile files and no config-generation step.
+There are no platform-specific model registries and no config-generation step.
 
 ## NVIDIA Container Toolkit on Linux
 
@@ -101,4 +115,4 @@ Use the server as an OpenAI-compatible provider with base URL:
 http://127.0.0.1:9292/v1
 ```
 
-The virtual model IDs come directly from `llama-swap/config.yaml` and are discoverable through `/v1/models`.
+The virtual model IDs come from the machine-local `llama-swap/config.yaml` and are discoverable through `/v1/models`.
