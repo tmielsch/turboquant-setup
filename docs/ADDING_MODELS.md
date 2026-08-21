@@ -146,6 +146,12 @@ A local model change does **not** have to be copied back into `config.example.ya
 
 Only update `config.example.yaml` when you intentionally want future fresh installations to start with that profile. Differences between local config and the example are normal and should not be treated as drift.
 
+## Migrating from the old registry
+
+For an existing machine, prefer preserving the current live `llama-swap/config.yaml` rather than regenerating it from `models.conf`.
+
+After the repository refactor, keep that YAML as the local gitignored runtime config and retire the old registry. The old INI file is not a new source of truth.
+
 ## Apply and validate
 
 llama-swap runs with config watching enabled, so a valid edit may reload automatically. If needed:
