@@ -1,7 +1,7 @@
-# AUTO-GENERATED from models.conf by scripts/generate-config.sh.
-# Do not edit by hand - your changes will be overwritten.
-# Regenerate with:  bash scripts/generate-config.sh
-# Apply with:       docker compose restart turboquant
+# Canonical runtime configuration for llama-swap.
+# Edit this file directly. Do not regenerate it from another registry.
+# Multiple virtual model IDs may point to the same GGUF with different runtime flags.
+# llama-swap watches this file; restart the container only if a reload is needed.
 
 startPort: 5800
 sendLoadingState: false
