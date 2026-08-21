@@ -4,3 +4,4 @@ build/
 *.part
 .superpowers/
 .env
+llama-swap/config.yaml
