@@ -28,7 +28,7 @@ There are deliberately two different kinds of state, with no generator between t
 
 On a new machine, copy the example once. After that, edit the local `config.yaml` directly. Setup, Git pulls, agents, and maintenance scripts must never overwrite it.
 
-There is no `models.conf`, config generator, model registry, or synchronization layer.
+There is no `models.conf`, config generator, model registry, or synchronization layer. This matches llama-swap's own intentionally simple design: one binary and one live configuration file.
 
 Configuration boundaries:
 
