@@ -4,4 +4,5 @@ build/
 *.part
 .superpowers/
 .env
+# Machine-local llama-swap runtime configuration. The tracked baseline is config.example.yaml.
 llama-swap/config.yaml
